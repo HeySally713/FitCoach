@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
@@ -6,6 +6,8 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, SafeAreaView, TextInput 
 } from 'react-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
+import { searchExerciseVideos } from './src/services/youtube';
+
 
 const Tab = createBottomTabNavigator();
 
@@ -14,6 +16,7 @@ const WorkoutScreen = () => {
   const [selectedCategory, setSelectedCategory] = useState('gym');
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [sets, setSets] = useState([{ id: 1, weight: '', reps: '', done: false }]);
+
 
   const categories = [
     { key: 'gym', label: '🏋️ 헬스장' },
@@ -494,3 +497,4 @@ const styles = StyleSheet.create({
   },
   completeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });
+

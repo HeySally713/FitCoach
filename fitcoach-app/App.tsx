@@ -1,22 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { 
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, SafeAreaView, TextInput 
+import {
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, SafeAreaView, TextInput,
+  Image, ActivityIndicator
 } from 'react-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
-import { searchExerciseVideos } from './src/services/youtube';
+import { useExerciseVideos } from './src/hooks/useExerciseVideos';
+import { ExerciseVideo, SearchVideosParams } from './src/services/youtube';
+import { Exercise, CARDIO_DURATIONS, CardioDuration } from './src/types/exercise';
+
 
 
 const Tab = createBottomTabNavigator();
 
 // 🏋️ 운동기록 화면 (메인 기능)
 const WorkoutScreen = () => {
-  const [selectedCategory, setSelectedCategory] = useState('gym');
-  const [selectedExercise, setSelectedExercise] = useState<any>(null);
-  const [sets, setSets] = useState([{ id: 1, weight: '', reps: '', done: false }]);
+const [selectedCategory, setSelectedCategory] = useState<string>('gym');
+const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+const [sets, setSets] = useState([{ id: 1, weight: '', reps: '', done: false }]);
 
+// Step C: 영상 선택 + 카디오 시간 선택 상태
+const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+const [cardioDuration, setCardioDuration] = useState<CardioDuration | null>(null);
+
+// Step C: YouTube 검색 파라미터 (cardio는 duration 선택 후에만 검색)
+const searchParams: SearchVideosParams | null = useMemo(() => {
+  if (!selectedExercise) return null;
+
+  // cardio는 duration 선택 전까지 검색 안 함
+  if (selectedExercise.equipmentType === 'cardio' && !cardioDuration) {
+    return null;
+  }
+
+  return {
+    exerciseName: selectedExercise.name,
+    equipmentType: selectedExercise.equipmentType,
+    cardioDuration: cardioDuration ?? undefined,
+  };
+}, [selectedExercise, cardioDuration]);
+
+// Step C: 영상 검색 훅 사용
+const { videos, loading, error } = useExerciseVideos(searchParams);
+
+// Step C: 영상 결과가 도착하면 첫 번째 영상 자동 선택
+useEffect(() => {
+  if (videos.length > 0) {
+    setCurrentVideoId(videos[0].videoId);
+  } else if (selectedExercise?.videoId && !loading) {
+    // API 결과 없으면 하드코딩 폴백
+    setCurrentVideoId(selectedExercise.videoId);
+  } else {
+    setCurrentVideoId(null);
+  }
+}, [videos, loading, selectedExercise]);
 
   const categories = [
     { key: 'gym', label: '🏋️ 헬스장' },
@@ -25,89 +63,32 @@ const WorkoutScreen = () => {
     { key: 'cardio', label: '🏃 유산소' },
   ];
 
-  // 실제 YouTube 운동 영상이 포함된 데이터
-  const exercises: any = {
-    gym: [
-      { 
-        id: '1', 
-        name: '인클라인 덤벨 프레스', 
-        target: '가슴, 어깨', 
-        level: '중급', 
-        videoId: 'jZOywn1qArI' // 실제 운동 영상
-      },
-      { 
-        id: '2', 
-        name: '벤치프레스', 
-        target: '가슴', 
-        level: '중급', 
-        videoId: 'vthMCtgVtFw' 
-      },
-      { 
-        id: '3', 
-        name: '스쿼트', 
-        target: '하체, 둔근', 
-        level: '중급', 
-        videoId: 'Fk9j6pQ6zjc' 
-      },
-      { 
-        id: '4', 
-        name: '데드리프트', 
-        target: '등, 하체', 
-        level: '고급', 
-        videoId: 'op9kVnSso6Q' 
-      },
-    ],
-    home: [
-      { 
-        id: '6', 
-        name: '플랭크', 
-        target: '코어', 
-        level: '초급', 
-        videoId: 'ASdvN_XEl_c' 
-      },
-      { 
-        id: '7', 
-        name: '버피', 
-        target: '전신', 
-        level: '중급', 
-        videoId: 'TU8QYVW0gDU' 
-      },
-      { 
-        id: '8', 
-        name: '푸시업', 
-        target: '가슴, 삼두', 
-        level: '초급', 
-        videoId: 'IODxDxX7oi4' 
-      },
-    ],
-    yoga: [
-      { 
-        id: '9', 
-        name: '태양경배', 
-        target: '전신 스트레칭', 
-        level: '초급', 
-        videoId: '1wjZqLw8oI0' 
-      },
-      { 
-        id: '10', 
-        name: '다운독', 
-        target: '어깨, 햄스트링', 
-        level: '초급', 
-        videoId: 'VpP7zW4wJo4' 
-      },
-    ],
-    cardio: [
-      { 
-        id: '11', 
-        name: 'HIIT 운동', 
-        target: '심폐지구력', 
-        level: '중급', 
-        videoId: '9L2b2khySLE' 
-      },
-    ],
-  };
+const exercises: Record<string, Exercise[]> = {
+  gym: [
+    { id: '1', name: '인클라인 덤벨 프레스', category: 'gym', equipmentType: 'freeweight', target: '가슴, 어깨', level: '중급', videoId: 'jZOywn1qArI' },
+    { id: '2', name: '벤치프레스', category: 'gym', equipmentType: 'freeweight', target: '가슴', level: '중급', videoId: 'vthMCtgVtFw' },
+    { id: '3', name: '스쿼트', category: 'gym', equipmentType: 'freeweight', target: '하체, 둔근', level: '중급', videoId: 'Fk9j6pQ6zjc' },
+    { id: '4', name: '데드리프트', category: 'gym', equipmentType: 'freeweight', target: '등, 하체', level: '고급', videoId: 'op9kVnSso6Q' },
+  ],
+  home: [
+    { id: '6', name: '플랭크', category: 'home', equipmentType: 'bodyweight', target: '코어', level: '초급', videoId: 'ASdvN_XEl_c' },
+    { id: '7', name: '버피', category: 'home', equipmentType: 'bodyweight', target: '전신', level: '중급', videoId: 'TU8QYVW0gDU' },
+    { id: '8', name: '푸시업', category: 'home', equipmentType: 'bodyweight', target: '가슴, 삼두', level: '초급', videoId: 'IODxDxX7oi4' },
+  ],
+  yoga: [
+    { id: '9', name: '태양경배', category: 'yoga', equipmentType: 'yoga', target: '전신 스트레칭', level: '초급', videoId: '1wjZqLw8oI0' },
+    { id: '10', name: '다운독', category: 'yoga', equipmentType: 'yoga', target: '어깨, 햄스트링', level: '초급', videoId: 'VpP7zW4wJo4' },
+  ],
+  cardio: [
+    { id: '11', name: 'HIIT 운동', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '12', name: '러닝머신', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '초급', videoId: '9L2b2khySLE' },
+    { id: '13', name: '사이클', category: 'cardio', equipmentType: 'cardio', target: '하체, 심폐', level: '초급', videoId: '9L2b2khySLE' },
+  ],
+};
 
-  const currentExercises = exercises[selectedCategory] || [];
+const currentExercises: Exercise[] = exercises[selectedCategory] || [];
+
+
 
   // 세트 추가 함수
   const addSet = () => {
@@ -125,10 +106,13 @@ const WorkoutScreen = () => {
   };
 
   // 모달 닫기 함수
-  const closeModal = () => {
-    setSelectedExercise(null);
-    setSets([{ id: 1, weight: '', reps: '', done: false }]);
-  };
+const closeModal = () => {
+  setSelectedExercise(null);
+  setCurrentVideoId(null);
+  setCardioDuration(null);
+  setSets([{ id: 1, weight: '', reps: '', done: false }]);
+};
+
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -166,7 +150,7 @@ const WorkoutScreen = () => {
 
       {/* 운동 리스트 */}
       <ScrollView style={styles.exerciseList}>
-        {currentExercises.map((exercise: any) => (
+        {currentExercises.map((exercise: Exercise) => (
           <TouchableOpacity 
             key={exercise.id} 
             style={styles.exerciseCard}
@@ -206,19 +190,104 @@ const WorkoutScreen = () => {
           </View>
 
           <ScrollView style={styles.modalContent}>
-            {/* YouTube 영상 플레이어 */}
-            <View style={styles.videoContainer}>
-              <Text style={styles.videoTitle}>🎥 운동 가이드 영상</Text>
-              {selectedExercise?.videoId && (
-                <View style={styles.playerContainer}>
-                  <YoutubePlayer
-                    height={220}
-                    play={false}
-                    videoId={selectedExercise.videoId}
-                  />
-                </View>
-              )}
-            </View>
+{/* Step C: 카디오 시간 선택 (cardio + duration 미선택 시) */}
+{selectedExercise?.equipmentType === 'cardio' && !cardioDuration && (
+  <View style={styles.videoContainer}>
+    <Text style={styles.videoTitle}>⏱ 운동 시간을 선택하세요</Text>
+    <View style={styles.durationRow}>
+      {CARDIO_DURATIONS.map((d: CardioDuration) => (
+        <TouchableOpacity
+          key={d}
+          style={styles.durationBtn}
+          onPress={() => setCardioDuration(d)}
+        >
+          <Text style={styles.durationBtnText}>{d}분</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  </View>
+)}
+
+{/* Step C: 영상 플레이어 + 영상 리스트 (시간 선택 완료 또는 비-cardio) */}
+{(selectedExercise?.equipmentType !== 'cardio' || cardioDuration) && (
+  <View style={styles.videoContainer}>
+    <View style={styles.videoTitleRow}>
+      <Text style={styles.videoTitle}>
+        🎥 운동 가이드 영상
+        {cardioDuration ? ` (${cardioDuration}분)` : ''}
+      </Text>
+      {videos.length > 0 && (
+        <Text style={styles.videoCount}>{videos.length}개 영상</Text>
+      )}
+    </View>
+
+    {/* 메인 플레이어 */}
+    {currentVideoId ? (
+      <View style={styles.playerContainer}>
+        <YoutubePlayer
+          height={220}
+          play={false}
+          videoId={currentVideoId}
+        />
+      </View>
+    ) : (
+      <View style={[styles.playerContainer, styles.playerPlaceholder]}>
+        {loading ? (
+          <>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.placeholderText}>영상 검색 중...</Text>
+          </>
+        ) : (
+          <Text style={styles.placeholderText}>
+            {error ?? '영상을 준비 중입니다'}
+          </Text>
+        )}
+      </View>
+    )}
+
+    {/* 영상 썸네일 가로 스크롤 */}
+    {videos.length > 0 && (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.thumbnailScroll}
+        contentContainerStyle={styles.thumbnailContainer}
+      >
+        {videos.map((video: ExerciseVideo) => {
+          const isActive = video.videoId === currentVideoId;
+          return (
+            <TouchableOpacity
+              key={video.videoId}
+              style={[
+                styles.thumbnailCard,
+                isActive && styles.thumbnailCardActive,
+              ]}
+              onPress={() => setCurrentVideoId(video.videoId)}
+            >
+              <Image
+                source={{ uri: video.thumbnailUrl }}
+                style={styles.thumbnailImage}
+              />
+              <Text style={styles.thumbnailTitle} numberOfLines={2}>
+                {video.title}
+              </Text>
+              <Text style={styles.thumbnailChannel} numberOfLines={1}>
+                {video.channelTitle}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    )}
+
+    {error && videos.length === 0 && (
+      <Text style={styles.errorHint}>
+        💡 인터넷 연결을 확인하거나 다른 운동을 선택해보세요
+      </Text>
+    )}
+  </View>
+)}
+
 
             {/* 운동 기록 섹션 */}
             <View style={styles.recordContainer}>
@@ -496,5 +565,96 @@ const styles = StyleSheet.create({
     alignItems: 'center' 
   },
   completeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+// Step C: 영상 리스트 + 카디오 시간 선택 스타일
+videoTitleRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 12,
+},
+videoCount: {
+  color: '#3B82F6',
+  fontSize: 13,
+  fontWeight: '600',
+},
+playerPlaceholder: {
+  height: 220,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#1E293B',
+},
+placeholderText: {
+  color: '#94A3B8',
+  fontSize: 14,
+  marginTop: 12,
+  textAlign: 'center',
+},
+thumbnailScroll: {
+  marginTop: 16,
+  marginBottom: 8,
+},
+thumbnailContainer: {
+  paddingRight: 20,
+  gap: 12,
+},
+thumbnailCard: {
+  width: 160,
+  backgroundColor: '#1E293B',
+  borderRadius: 12,
+  padding: 8,
+  marginRight: 12,
+  borderWidth: 2,
+  borderColor: 'transparent',
+},
+thumbnailCardActive: {
+  borderColor: '#3B82F6',
+  backgroundColor: '#1E3A5F',
+},
+thumbnailImage: {
+  width: '100%',
+  height: 90,
+  borderRadius: 8,
+  backgroundColor: '#0F172A',
+},
+thumbnailTitle: {
+  color: '#F8FAFC',
+  fontSize: 12,
+  fontWeight: '600',
+  marginTop: 8,
+  lineHeight: 16,
+},
+thumbnailChannel: {
+  color: '#94A3B8',
+  fontSize: 11,
+  marginTop: 4,
+},
+errorHint: {
+  color: '#94A3B8',
+  fontSize: 13,
+  textAlign: 'center',
+  marginTop: 12,
+  fontStyle: 'italic',
+},
+durationRow: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 12,
+  justifyContent: 'space-between',
+},
+durationBtn: {
+  flex: 1,
+  minWidth: '22%',
+  backgroundColor: '#1E293B',
+  paddingVertical: 18,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: '#334155',
+  alignItems: 'center',
+},
+durationBtnText: {
+  color: '#F8FAFC',
+  fontSize: 16,
+  fontWeight: '700',
+},
 });
 

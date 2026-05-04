@@ -111,9 +111,11 @@ export async function searchExerciseVideos(
   const url =
     `https://www.googleapis.com/youtube/v3/search` +
     `?part=snippet` +
-    `&maxResults=15` + // 필터링 후 5개 확보를 위해 15개 요청
+    `&maxResults=20` +
     `&q=${encodeURIComponent(query)}` +
     `&type=video` +
+    `&videoEmbeddable=true` +
+    `&videoSyndicated=true` +
     `&relevanceLanguage=ko` +
     `&order=relevance` +
     `&publishedAfter=${encodeURIComponent(publishedAfter)}` +
@@ -133,19 +135,17 @@ export async function searchExerciseVideos(
       return [];
     }
 
-    const videos: ExerciseVideo[] = data.items
+    // 1️⃣ 후보 추출 (제목 필터링)
+    const candidates: ExerciseVideo[] = data.items
       .filter((item) => {
         if (!item.id.videoId) return false;
-
         const titleLower = item.snippet.title.toLowerCase();
         const hasBlockedKeyword = BLOCK_KEYWORDS.some((kw) =>
           titleLower.includes(kw)
         );
         if (hasBlockedKeyword) return false;
-
         return true;
       })
-      .slice(0, 5)
       .map((item) => ({
         videoId: item.id.videoId!,
         title: item.snippet.title,
@@ -155,10 +155,55 @@ export async function searchExerciseVideos(
           item.snippet.thumbnails.default?.url,
       }));
 
-    console.log(`[YouTube] "${query}" → ${videos.length}개 영상 검색 완료`);
+    // 2️⃣ 임베드 가능 여부 검증
+    const verifiedVideos = await verifyEmbeddable(candidates, apiKey);
+    const videos = verifiedVideos.slice(0, 5);
+
+    console.log(
+      `[YouTube] "${query}" → ${videos.length}개 영상 검색 완료 (검증: ${candidates.length}→${verifiedVideos.length})`
+    );
     return videos;
   } catch (error) {
     console.error('[YouTube Service] 영상 검색 실패:', error);
     return [];
+  }
+}
+
+/**
+ * videos.list API로 실제 임베드 가능 여부를 확인합니다.
+ * search API의 videoEmbeddable 필터가 부정확한 케이스를 보완합니다.
+ */
+async function verifyEmbeddable(
+  candidates: ExerciseVideo[],
+  apiKey: string
+): Promise<ExerciseVideo[]> {
+  if (candidates.length === 0) return [];
+
+  const ids = candidates.map((v) => v.videoId).join(',');
+  const url =
+    `https://www.googleapis.com/youtube/v3/videos` +
+    `?part=status` +
+    `&id=${ids}` +
+    `&key=${apiKey}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.error) {
+      console.warn('[YouTube] 검증 실패, 원본 사용:', data.error.message);
+      return candidates;
+    }
+
+    const embeddableIds = new Set<string>(
+      (data.items || [])
+        .filter((item: any) => item.status?.embeddable === true)
+        .map((item: any) => item.id)
+    );
+
+    return candidates.filter((v) => embeddableIds.has(v.videoId));
+  } catch (error) {
+    console.warn('[YouTube] 검증 중 오류, 원본 사용:', error);
+    return candidates;
   }
 }

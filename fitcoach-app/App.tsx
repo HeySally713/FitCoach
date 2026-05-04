@@ -10,6 +10,7 @@ import YoutubePlayer from 'react-native-youtube-iframe';
 import { useExerciseVideos } from './src/hooks/useExerciseVideos';
 import { ExerciseVideo, SearchVideosParams } from './src/services/youtube';
 import { Exercise, CARDIO_DURATIONS, CardioDuration } from './src/types/exercise';
+import { Platform } from 'react-native';
 
 
 
@@ -224,11 +225,26 @@ const closeModal = () => {
     {/* 메인 플레이어 */}
     {currentVideoId ? (
       <View style={styles.playerContainer}>
-        <YoutubePlayer
-          height={220}
-          play={false}
-          videoId={currentVideoId}
-        />
+{Platform.OS === 'web' ? (
+  <iframe
+    key={currentVideoId}
+    width="100%"
+    height="220"
+   src={`https://www.youtube-nocookie.com/embed/${currentVideoId}?rel=0&modestbranding=1&playsinline=1`}
+    title="YouTube video player"
+    frameBorder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowFullScreen
+    style={{ borderRadius: 8 }}
+  />
+) : (
+  <YoutubePlayer
+    height={220}
+    videoId={currentVideoId}
+    play={false}
+  />
+)}
+
       </View>
     ) : (
       <View style={[styles.playerContainer, styles.playerPlaceholder]}>

@@ -2,29 +2,55 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, SafeAreaView, TextInput,
-  Image, ActivityIndicator
+import { 
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, 
+  SafeAreaView, TextInput, Image, ActivityIndicator,
+  Platform, Alert  // 합침
 } from 'react-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { useExerciseVideos } from './src/hooks/useExerciseVideos';
 import { ExerciseVideo, SearchVideosParams } from './src/services/youtube';
 import { Exercise, CARDIO_DURATIONS, CardioDuration } from './src/types/exercise';
-import { Platform } from 'react-native';
+import { 
+  saveExercise, 
+  getTodayExercise, 
+  upsertTodayExercise,
+  getRecentBodyPart,           // ← 추가
+} from './src/services/storage';
+import { 
+  BodyPart, 
+  BODY_PART_OPTIONS, 
+  BODY_PART_EMOJI 
+} from './src/types/workout';
 
+import { HistoryScreen } from './src/screens/HistoryScreen';
 
 
 const Tab = createBottomTabNavigator();
+
+interface SetState {
+  id: number;
+  weight: string;
+  reps: string;
+  done: boolean;
+  originalSetNumber?: number; // DB에 이미 저장된 세트면 번호 보유
+}
+
+
 
 // 🏋️ 운동기록 화면 (메인 기능)
 const WorkoutScreen = () => {
 const [selectedCategory, setSelectedCategory] = useState<string>('gym');
 const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-const [sets, setSets] = useState([{ id: 1, weight: '', reps: '', done: false }]);
+const [sets, setSets] = useState<SetState[]>([
+    { id: 1, weight: '', reps: '', done: false },
+  ]);
 
 // Step C: 영상 선택 + 카디오 시간 선택 상태
 const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
 const [cardioDuration, setCardioDuration] = useState<CardioDuration | null>(null);
+
+const [selectedBodyPart, setSelectedBodyPart] = useState<BodyPart | null>(null);
 
 // Step C: YouTube 검색 파라미터 (cardio는 duration 선택 후에만 검색)
 const searchParams: SearchVideosParams | null = useMemo(() => {
@@ -44,6 +70,33 @@ const searchParams: SearchVideosParams | null = useMemo(() => {
 
 // Step C: 영상 검색 훅 사용
 const { videos, loading, error } = useExerciseVideos(searchParams);
+
+// Step D: 모달 열 때 오늘 그 운동의 기존 기록 로드
+useEffect(() => {
+  if (!selectedExercise) return;
+  const loadTodayRecord = async () => {
+    const todayRecord = await getTodayExercise(selectedExercise.id);
+    if (todayRecord && todayRecord.sets.length > 0) {
+      const restoredSets = todayRecord.sets.map((s, i) => ({
+        id: i + 1,
+        weight: String(s.weight),
+        reps: String(s.reps),
+        done: s.completed,
+        originalSetNumber: s.setNumber,
+      }));
+      setSets([...restoredSets, { id: restoredSets.length + 1, weight: '', reps: '', done: false }]);
+      // 오늘 이미 분류된 부위가 있으면 그대로 사용
+      setSelectedBodyPart(todayRecord.bodyPart || null);
+    } else {
+      setSets([{ id: 1, weight: '', reps: '', done: false }]);
+      // 오늘 기록이 없으면 가장 최근 분류한 부위를 자동 선택
+      const recentPart = await getRecentBodyPart(selectedExercise.id);
+      setSelectedBodyPart(recentPart);
+    }
+  };
+  loadTodayRecord();
+}, [selectedExercise]);
+
 
 // Step C: 영상 결과가 도착하면 첫 번째 영상 자동 선택
 useEffect(() => {
@@ -90,28 +143,85 @@ const exercises: Record<string, Exercise[]> = {
 const currentExercises: Exercise[] = exercises[selectedCategory] || [];
 
 
+const toggleSetDone = (id: number) => {
+  setSets((prev) =>
+    prev.map((set) => (set.id === id ? { ...set, done: !set.done } : set))
+  );
+};
 
-  // 세트 추가 함수
-  const addSet = () => {
-    setSets([...sets, { id: sets.length + 1, weight: '', reps: '', done: false }]);
-  };
+const updateSet = (id: number, field: 'weight' | 'reps', value: string) => {
+  setSets((prev) =>
+    prev.map((set) => (set.id === id ? { ...set, [field]: value } : set))
+  );
+};
 
-  // 세트 완료 토글 함수
-  const toggleSetDone = (id: number) => {
-    setSets(sets.map(set => set.id === id ? { ...set, done: !set.done } : set));
-  };
+const addSet = () => {
+  setSets((prev) => [
+    ...prev,
+    { id: prev.length + 1, weight: '', reps: '', done: false },
+  ]);
+};
 
-  // 세트 데이터 업데이트 함수
-  const updateSet = (id: number, field: 'weight' | 'reps', value: string) => {
-    setSets(sets.map(set => set.id === id ? { ...set, [field]: value } : set));
-  };
+
 
   // 모달 닫기 함수
 const closeModal = () => {
   setSelectedExercise(null);
   setCurrentVideoId(null);
   setCardioDuration(null);
+  setSelectedBodyPart(null);    // ← 이 줄 추가
   setSets([{ id: 1, weight: '', reps: '', done: false }]);
+};
+
+// Step D: 운동 완료 - 기록 저장 (upsert: 기존 수정 + 신규 추가)
+const handleCompleteWorkout = async () => {
+  if (!selectedExercise) return;
+
+  // 완료된 세트만 (무게/횟수 입력 안 한 미완료 세트는 제외)
+  const completedSets = sets.filter((s) => s.done);
+
+  if (completedSets.length === 0) {
+    Alert.alert(
+      '저장할 세트가 없어요',
+      '최소 1개 이상의 세트를 완료(✓)해주세요.',
+      [{ text: '확인' }]
+    );
+    return;
+  }
+
+  try {
+    await upsertTodayExercise({
+      exerciseId: selectedExercise.id,
+      exerciseName: selectedExercise.name,
+      category: selectedExercise.category,
+      equipmentType: selectedExercise.equipmentType,
+      bodyPart: selectedBodyPart || undefined,
+      sets: completedSets.map((s, idx) => ({
+        setNumber: idx + 1, // 자동 이어붙이기 (1, 2, 3, ...)
+        weight: parseFloat(s.weight) || 0,
+        reps: parseInt(s.reps, 10) || 0,
+        completed: true,
+      })),
+    });
+
+    // 새로 추가된 세트 수 계산 (메시지용)
+    const previouslySaved = completedSets.filter(
+      (s) => s.originalSetNumber !== undefined
+    ).length;
+    const newlyAdded = completedSets.length - previouslySaved;
+
+    const message =
+      newlyAdded > 0
+        ? `${selectedExercise.name} 총 ${completedSets.length}세트 (신규 ${newlyAdded}세트 추가)`
+        : `${selectedExercise.name} ${completedSets.length}세트가 업데이트되었어요`;
+
+    Alert.alert('✅ 기록 저장 완료', message, [
+      { text: '확인', onPress: closeModal },
+    ]);
+  } catch (error) {
+    console.error('[WorkoutScreen] 저장 실패:', error);
+    Alert.alert('저장 실패', '잠시 후 다시 시도해주세요.');
+  }
 };
 
 
@@ -184,6 +294,40 @@ const closeModal = () => {
               <Text style={styles.modalSubtitle}>
                 {selectedExercise?.target} • {selectedExercise?.level}
               </Text>
+              {/* 운동 부위 선택 영역 */}
+<View style={styles.bodyPartSection}>
+  <Text style={styles.bodyPartLabel}>운동 부위</Text>
+  <ScrollView 
+    horizontal 
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.bodyPartChipRow}
+  >
+    {BODY_PART_OPTIONS.map((part) => {
+      const isSelected = selectedBodyPart === part;
+      return (
+        <TouchableOpacity
+          key={part}
+          style={[
+            styles.bodyPartChip,
+            isSelected && styles.bodyPartChipSelected,
+          ]}
+          onPress={() => 
+            setSelectedBodyPart(isSelected ? null : part)
+          }
+          activeOpacity={0.7}
+        >
+          <Text style={[
+            styles.bodyPartChipText,
+            isSelected && styles.bodyPartChipTextSelected,
+          ]}>
+            {BODY_PART_EMOJI[part]} {part}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </ScrollView>
+</View>
+
             </View>
             <TouchableOpacity onPress={closeModal} style={styles.closeBtn}>
               <Text style={styles.closeBtnText}>✕</Text>
@@ -331,7 +475,7 @@ const closeModal = () => {
                     placeholderTextColor="#64748B"
                     value={set.weight}
                     onChangeText={(value) => updateSet(set.id, 'weight', value)}
-                    editable={!set.done}
+                    editable={true}
                   />
                   <TextInput 
                     style={[styles.input, set.done && styles.inputDone]} 
@@ -340,7 +484,8 @@ const closeModal = () => {
                     placeholderTextColor="#64748B"
                     value={set.reps}
                     onChangeText={(value) => updateSet(set.id, 'reps', value)}
-                    editable={!set.done}
+                    editable={true}
+
                   />
                   <TouchableOpacity 
                     style={[styles.checkBtn, set.done && styles.checkBtnDone]}
@@ -357,9 +502,13 @@ const closeModal = () => {
               </TouchableOpacity>
 
               {/* 운동 완료 버튼 */}
-              <TouchableOpacity style={styles.completeBtn} onPress={closeModal}>
-                <Text style={styles.completeBtnText}>🏁 운동 완료</Text>
-              </TouchableOpacity>
+
+                        <TouchableOpacity 
+            style={styles.completeButton}
+            onPress={handleCompleteWorkout}
+          >
+            <Text style={styles.completeButtonText}>💾 운동 완료</Text>
+          </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -385,13 +534,6 @@ const CommunityScreen = () => (
   </View>
 );
 
-const ProfileScreen = () => (
-  <View style={[styles.screen, styles.centerContent]}>
-    <Text style={styles.bigEmoji}>👤</Text>
-    <Text style={styles.screenTitle}>마이페이지</Text>
-    <Text style={styles.screenSub}>운동 통계 및 개인 기록 관리 예정</Text>
-  </View>
-);
 
 export default function App() {
   return (
@@ -418,7 +560,12 @@ export default function App() {
           <Tab.Screen name="Workout" component={WorkoutScreen} options={{ title: '운동기록' }} />
           <Tab.Screen name="Videos" component={VideoScreen} options={{ title: '영상가이드' }} />
           <Tab.Screen name="Community" component={CommunityScreen} options={{ title: '커뮤니티' }} />
-          <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: '마이페이지' }} />
+          <Tab.Screen 
+  name="Profile" 
+  component={HistoryScreen}   // 👈 ProfileScreen → HistoryScreen
+  options={{ title: '마이페이지' }} 
+/>
+
         </Tab.Navigator>
       </NavigationContainer>
     </>
@@ -581,6 +728,27 @@ const styles = StyleSheet.create({
     alignItems: 'center' 
   },
   completeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
+  completeButton: {
+  backgroundColor: '#3B82F6',
+  paddingVertical: 16,
+  borderRadius: 12,
+  alignItems: 'center',
+  marginTop: 16,
+  marginBottom: 8,
+  shadowColor: '#3B82F6',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+  elevation: 6,
+},
+completeButtonText: {
+  color: '#FFFFFF',
+  fontSize: 16,
+  fontWeight: '700',
+  letterSpacing: 0.5,
+},
+
 // Step C: 영상 리스트 + 카디오 시간 선택 스타일
 videoTitleRow: {
   flexDirection: 'row',
@@ -672,5 +840,44 @@ durationBtnText: {
   fontSize: 16,
   fontWeight: '700',
 },
+
+bodyPartSection: {
+  marginTop: 12,
+  marginBottom: 8,
+},
+bodyPartLabel: {
+  color: '#94A3B8',
+  fontSize: 13,
+  fontWeight: '600',
+  marginBottom: 8,
+  paddingHorizontal: 4,
+},
+bodyPartChipRow: {
+  paddingHorizontal: 4,
+  gap: 8,
+},
+bodyPartChip: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 20,
+  backgroundColor: '#1E293B',
+  borderWidth: 1,
+  borderColor: '#334155',
+  marginRight: 8,
+},
+bodyPartChipSelected: {
+  backgroundColor: '#3B82F6',
+  borderColor: '#60A5FA',
+},
+bodyPartChipText: {
+  color: '#94A3B8',
+  fontSize: 13,
+  fontWeight: '500',
+},
+bodyPartChipTextSelected: {
+  color: '#FFFFFF',
+  fontWeight: '700',
+},
+
 });
 

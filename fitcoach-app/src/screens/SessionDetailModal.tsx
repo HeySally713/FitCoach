@@ -116,9 +116,9 @@ export const SessionDetailModal = ({
                     <View key={s.setNumber} style={styles.tableRow}>
                       <Text style={[styles.cell, { flex: 1 }]}>{s.setNumber}</Text>
                       <Text style={[styles.cell, { flex: 2 }]}>
-                        {s.weight > 0 ? s.weight : '-'}
+                       {(s.weight ?? 0) > 0 ? s.weight : '-'}
                       </Text>
-                      <Text style={[styles.cell, { flex: 2 }]}>{s.reps}</Text>
+                      <Text style={[styles.cell, { flex: 2 }]}>{s.reps ?? 0}</Text>
                       <Text style={[styles.cell, { flex: 1, color: '#10B981' }]}>
                         {s.completed ? '✓' : ''}
                       </Text>

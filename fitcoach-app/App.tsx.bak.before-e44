@@ -18,7 +18,6 @@ import {
   getRecentBodyPart,           // ← 추가
 } from './src/services/storage';
 import { CardioInputForm, CardioFields } from './src/components/CardioInputForm';
-import { getMetByActivity, calculateCalories, calculatePace } from './src/utils/calorie';
 import { 
   BodyPart, 
   BODY_PART_OPTIONS, 
@@ -196,61 +195,6 @@ const closeModal = () => {
 // Step D: 운동 완료 - 기록 저장 (upsert: 기존 수정 + 신규 추가)
 const handleCompleteWorkout = async () => {
   if (!selectedExercise) return;
-    // === Cardio 분기 (시간 기반 운동) ===
-  if (selectedExercise.equipmentType === 'cardio') {
-    const duration = parseFloat(cardioFields.duration || '0');
-    if (duration <= 0) {
-      Alert.alert('시간을 입력해주세요', '운동 시간(분)이 필요합니다.', [{ text: '확인' }]);
-      return;
-    }
-
-    const distance = parseFloat(cardioFields.distance || '0');
-    const inputSpeed = parseFloat(cardioFields.speed || '0');
-    const incline = parseFloat(cardioFields.incline || '0');
-    const effectiveSpeed = inputSpeed > 0
-      ? inputSpeed
-      : (distance > 0 ? (distance / duration) * 60 : 0);
-
-    const met = getMetByActivity(selectedExercise.name, effectiveSpeed, incline);
-    const calories = calculateCalories(met, userWeightKg, duration);
-    const pace = distance > 0 ? calculatePace(distance, duration) : undefined;
-
-    try {
-      await upsertTodayExercise({
-        exerciseId: selectedExercise.id,
-        exerciseName: selectedExercise.name,
-        category: selectedExercise.category,
-        equipmentType: selectedExercise.equipmentType,
-        bodyPart: selectedBodyPart || '유산소',
-        sets: [{
-          setNumber: 1,
-          duration,
-          distance: distance > 0 ? distance : undefined,
-          speed: effectiveSpeed > 0 ? effectiveSpeed : undefined,
-          incline: incline > 0 ? incline : undefined,
-          jumpCount: parseFloat(cardioFields.jumpCount || '0') || undefined,
-          stepCount: parseFloat(cardioFields.stepCount || '0') || undefined,
-          floorCount: parseFloat(cardioFields.floorCount || '0') || undefined,
-          reps: parseFloat(cardioFields.reps || '0') || undefined,
-          pace,
-          calories,
-          completed: true,
-        }],
-      });
-
-      Alert.alert(
-        '✅ 기록 저장 완료',
-        `${selectedExercise.name} ${duration}분\n🔥 약 ${calories} kcal`,
-        [{ text: '확인', onPress: closeModal }]
-      );
-    } catch (e) {
-      console.error('[WorkoutScreen] cardio 저장 실패:', e);
-      Alert.alert('저장 실패', '잠시 후 다시 시도해주세요.');
-    }
-    return;
-  }
-
-
 
   // 완료된 세트만 (무게/횟수 입력 안 한 미완료 세트는 제외)
   const completedSets = sets.filter((s) => s.done);

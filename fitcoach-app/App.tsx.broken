@@ -17,8 +17,6 @@ import {
   upsertTodayExercise,
   getRecentBodyPart,           // ← 추가
 } from './src/services/storage';
-import { CardioInputForm, CardioFields } from './src/components/CardioInputForm';
-import { getMetByActivity, calculateCalories, calculatePace } from './src/utils/calorie';
 import { 
   BodyPart, 
   BODY_PART_OPTIONS, 
@@ -26,7 +24,8 @@ import {
 } from './src/types/workout';
 
 import { HistoryScreen } from './src/screens/HistoryScreen';
-
+import { CardioInputForm, CardioFields } from './src/components/CardioInputForm';
+import { getMetByActivity, calculateCalories, calculatePace } from './src/utils/calorie';
 
 
 
@@ -46,6 +45,8 @@ interface SetState {
 const WorkoutScreen = () => {
 const [selectedCategory, setSelectedCategory] = useState<string>('gym');
 const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+const [cardioFields, setCardioFields] = useState<CardioFields>({});
+const [userWeightKg] = useState<number>(70); // E-7에서 프로필 연동 예정
 const [sets, setSets] = useState<SetState[]>([
     { id: 1, weight: '', reps: '', done: false },
   ]);
@@ -55,9 +56,6 @@ const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
 const [cardioDuration, setCardioDuration] = useState<CardioDuration | null>(null);
 
 const [selectedBodyPart, setSelectedBodyPart] = useState<BodyPart | null>(null);
-const [cardioFields, setCardioFields] = useState<CardioFields>({});
-const [userWeightKg] = useState<number>(70);
-
 
 // Step C: YouTube 검색 파라미터 (cardio는 duration 선택 후에만 검색)
 const searchParams: SearchVideosParams | null = useMemo(() => {
@@ -137,7 +135,7 @@ const exercises: Record<string, Exercise[]> = {
     { id: '8', name: '푸시업', category: 'home', equipmentType: 'bodyweight', target: '가슴, 삼두', level: '초급', videoId: 'IODxDxX7oi4' },
     { id: 'h_hk', name: '하이니 (High Knee)', category: 'home', equipmentType: 'bodyweight', target: '하체+심폐', level: '중급', videoId: 'OAJ_J3EZkdY' },
     { id: 'h_js', name: '점핑잭', category: 'home', equipmentType: 'bodyweight', target: '전신+심폐', level: '초급', videoId: 'c4DAnQ6DtF8' },
-
+    
   ],
   yoga: [
     { id: '9', name: '태양경배', category: 'yoga', equipmentType: 'yoga', target: '전신 스트레칭', level: '초급', videoId: '1wjZqLw8oI0' },
@@ -147,7 +145,7 @@ const exercises: Record<string, Exercise[]> = {
     { id: '11', name: 'HIIT 운동', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '중급', videoId: '9L2b2khySLE' },
     { id: '12', name: '러닝머신', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '초급', videoId: '9L2b2khySLE' },
     { id: '13', name: '사이클', category: 'cardio', equipmentType: 'cardio', target: '하체, 심폐', level: '초급', videoId: '9L2b2khySLE' },
-        { id: '14', name: '인클라인 트레드밀', category: 'cardio', equipmentType: 'cardio', target: '심폐+하체', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '14', name: '인클라인 트레드밀', category: 'cardio', equipmentType: 'cardio', target: '심폐+하체', level: '중급', videoId: '9L2b2khySLE' },
     { id: '15', name: '야외 러닝', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '중급', videoId: '9L2b2khySLE' },
     { id: '16', name: '걷기', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '초급', videoId: '9L2b2khySLE' },
     { id: '17', name: '줄넘기', category: 'cardio', equipmentType: 'cardio', target: '심폐+종아리', level: '초급', videoId: '9L2b2khySLE' },
@@ -155,6 +153,7 @@ const exercises: Record<string, Exercise[]> = {
     { id: '19', name: '천국의 계단', category: 'cardio', equipmentType: 'cardio', target: '하체+심폐', level: '중급', videoId: '9L2b2khySLE' },
     { id: '20', name: '하이니 (High Knee)', category: 'cardio', equipmentType: 'cardio', target: '하체+심폐', level: '중급', videoId: '9L2b2khySLE' },
     { id: '21', name: '점핑잭', category: 'cardio', equipmentType: 'cardio', target: '전신+심폐', level: '초급', videoId: '9L2b2khySLE' },
+    { id: '22', name: '버피', category: 'cardio', equipmentType: 'cardio', target: '전신+심폐', level: '중급', videoId: '9L2b2khySLE' },
 
   ],
 };
@@ -188,33 +187,41 @@ const closeModal = () => {
   setSelectedExercise(null);
   setCurrentVideoId(null);
   setCardioDuration(null);
-  setSelectedBodyPart(null);    // ← 이 줄 추가
-  setCardioFields({});  // ← 추가
+  setSelectedBodyPart(null);
   setSets([{ id: 1, weight: '', reps: '', done: false }]);
+  setCardioFields({});  // ← 추가
 };
 
-// Step D: 운동 완료 - 기록 저장 (upsert: 기존 수정 + 신규 추가)
 const handleCompleteWorkout = async () => {
   if (!selectedExercise) return;
-    // === Cardio 분기 (시간 기반 운동) ===
-  if (selectedExercise.equipmentType === 'cardio') {
+  
+  const isCardio = selectedExercise.equipmentType === 'cardio';
+  
+  // === Cardio 분기 ===
+  if (isCardio) {
     const duration = parseFloat(cardioFields.duration || '0');
     if (duration <= 0) {
       Alert.alert('시간을 입력해주세요', '운동 시간(분)이 필요합니다.', [{ text: '확인' }]);
       return;
     }
-
+    
+    // MET 계산용 속도
     const distance = parseFloat(cardioFields.distance || '0');
     const inputSpeed = parseFloat(cardioFields.speed || '0');
     const incline = parseFloat(cardioFields.incline || '0');
-    const effectiveSpeed = inputSpeed > 0
-      ? inputSpeed
+    const effectiveSpeed = inputSpeed > 0 
+      ? inputSpeed 
       : (distance > 0 ? (distance / duration) * 60 : 0);
-
+    
+    // 칼로리 자동 계산
+    const { getMetByActivity, calculateCalories, calculatePace } = 
+      await import('./src/utils/calorie');
     const met = getMetByActivity(selectedExercise.name, effectiveSpeed, incline);
     const calories = calculateCalories(met, userWeightKg, duration);
-    const pace = distance > 0 ? calculatePace(distance, duration) : undefined;
-
+    const pace = distance > 0 
+      ? calculatePace(distance, duration) 
+      : undefined;
+    
     try {
       await upsertTodayExercise({
         exerciseId: selectedExercise.id,
@@ -237,7 +244,7 @@ const handleCompleteWorkout = async () => {
           completed: true,
         }],
       });
-
+      
       Alert.alert(
         '✅ 기록 저장 완료',
         `${selectedExercise.name} ${duration}분\n🔥 약 ${calories} kcal`,
@@ -249,21 +256,14 @@ const handleCompleteWorkout = async () => {
     }
     return;
   }
-
-
-
-  // 완료된 세트만 (무게/횟수 입력 안 한 미완료 세트는 제외)
-  const completedSets = sets.filter((s) => s.done);
-
+  
+  // === 기존 웨이트 운동 분기 ===
+  const completedSets = sets.filter(s => s.done);
   if (completedSets.length === 0) {
-    Alert.alert(
-      '저장할 세트가 없어요',
-      '최소 1개 이상의 세트를 완료(✓)해주세요.',
-      [{ text: '확인' }]
-    );
+    Alert.alert('저장할 세트가 없어요', '최소 1개 이상의 세트를 완료(✓)해주세요.', [{ text: '확인' }]);
     return;
   }
-
+  
   try {
     await upsertTodayExercise({
       exerciseId: selectedExercise.id,
@@ -271,37 +271,27 @@ const handleCompleteWorkout = async () => {
       category: selectedExercise.category,
       equipmentType: selectedExercise.equipmentType,
       bodyPart: selectedBodyPart || undefined,
-      sets: completedSets.map((s, idx) => ({
-        setNumber: idx + 1, // 자동 이어붙이기 (1, 2, 3, ...)
+      sets: completedSets.map((s, i) => ({
+        setNumber: i + 1,
         weight: parseFloat(s.weight) || 0,
         reps: parseInt(s.reps, 10) || 0,
         completed: true,
       })),
     });
-
-    // 새로 추가된 세트 수 계산 (메시지용)
-    const previouslySaved = completedSets.filter(
-      (s) => s.originalSetNumber !== undefined
-    ).length;
-    const newlyAdded = completedSets.length - previouslySaved;
-
-    const message =
-      newlyAdded > 0
-        ? `${selectedExercise.name} 총 ${completedSets.length}세트 (신규 ${newlyAdded}세트 추가)`
-        : `${selectedExercise.name} ${completedSets.length}세트가 업데이트되었어요`;
-
-    Alert.alert('✅ 기록 저장 완료', message, [
-      { text: '확인', onPress: closeModal },
-    ]);
-  } catch (error) {
-    console.error('[WorkoutScreen] 저장 실패:', error);
+    Alert.alert(
+      '✅ 기록 저장 완료',
+      `${selectedExercise.name} ${completedSets.length}세트가 저장되었어요.`,
+      [{ text: '확인', onPress: closeModal }]
+    );
+  } catch (e) {
+    console.error('[WorkoutScreen] 저장 실패:', e);
     Alert.alert('저장 실패', '잠시 후 다시 시도해주세요.');
   }
 };
 
-
   return (
     <SafeAreaView style={styles.screen}>
+
       {/* 헤더 */}
       <View style={styles.header}>
         <Text style={styles.logo}>FitCoach 💪</Text>
@@ -402,7 +392,9 @@ const handleCompleteWorkout = async () => {
     })}
   </ScrollView>
 </View>
-{/* Cardio 입력 폼 (cardio 운동일 때만 표시) */}
+
+
+{/* ← cardio 폼 추가 */}
 {selectedExercise?.equipmentType === 'cardio' && (
   <CardioInputForm
     exerciseName={selectedExercise.name}
@@ -411,7 +403,6 @@ const handleCompleteWorkout = async () => {
     userWeightKg={userWeightKg}
   />
 )}
-
 
             </View>
             <TouchableOpacity onPress={closeModal} style={styles.closeBtn}>
@@ -600,7 +591,7 @@ const handleCompleteWorkout = async () => {
       </Modal>
     </SafeAreaView>
   );
-};
+
 
 // 나머지 탭 화면들 (임시)
 const VideoScreen = () => (
@@ -964,5 +955,4 @@ bodyPartChipTextSelected: {
   fontWeight: '700',
 },
 
-});
-
+})

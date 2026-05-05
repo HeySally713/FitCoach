@@ -12,7 +12,14 @@ import {
   SafeAreaView,
   Alert,
 } from 'react-native';
-import { WorkoutSession, BODY_PART_EMOJI, BodyPart, WorkoutExercise } from '../types/workout';
+import { 
+  WorkoutSession, 
+  WorkoutExercise,
+  BODY_PART_EMOJI, 
+  BodyPart,
+  INTENSITY_EMOJI,
+  INTENSITY_LABEL,
+} from '../types/workout';
 import { formatRelativeDate } from '../utils/dateGroup';
 
 interface SessionDetailModalProps {
@@ -88,7 +95,9 @@ export const SessionDetailModal = ({
                     <Text style={styles.exerciseName}>{ex.exerciseName}</Text>
                     <Text style={styles.exerciseBodyPart}>
                       {emoji} {bodyPart ?? '미분류'}
+                      {ex.intensity && ` · ${INTENSITY_EMOJI[ex.intensity]} ${INTENSITY_LABEL[ex.intensity]}`}
                     </Text>
+
                   </View>
                   <TouchableOpacity
                     onPress={() => onEditExercise(ex)}
@@ -103,28 +112,104 @@ export const SessionDetailModal = ({
                     <Text style={styles.actionBtnText}>🗑️</Text>
                   </TouchableOpacity>
                 </View>
-
-                {/* 세트 테이블 */}
-                <View style={styles.table}>
-                  <View style={styles.tableHeader}>
-                    <Text style={[styles.tableHeaderText, { flex: 1 }]}>세트</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>무게(kg)</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>횟수</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 1 }]}>✓</Text>
+                {/* 세트 테이블 (cardio/weight 분기) */}
+                {ex.equipmentType === 'cardio' ? (
+                  // ===== Cardio 테이블 =====
+                  <View style={styles.table}>
+                    {ex.sets.map((s) => (
+                      <View key={s.setNumber}>
+                        <View style={styles.cardioRow}>
+                          {s.duration !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>⏱ 시간</Text>
+                              <Text style={styles.cardioCellValue}>{s.duration}분</Text>
+                            </View>
+                          )}
+                          {s.distance !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>📏 거리</Text>
+                              <Text style={styles.cardioCellValue}>{s.distance}km</Text>
+                            </View>
+                          )}
+                          {s.speed !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>🏃 속도</Text>
+                              <Text style={styles.cardioCellValue}>{s.speed.toFixed(1)}km/h</Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.cardioRow}>
+                          {s.incline !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>⛰️ 경사</Text>
+                              <Text style={styles.cardioCellValue}>{s.incline}%</Text>
+                            </View>
+                          )}
+                          {s.pace && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>👟 페이스</Text>
+                              <Text style={styles.cardioCellValue}>{s.pace}</Text>
+                            </View>
+                          )}
+                          {s.calories !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>🔥 칼로리</Text>
+                              <Text style={[styles.cardioCellValue, { color: '#FB923C' }]}>{s.calories}kcal</Text>
+                            </View>
+                          )}
+                          {s.jumpCount !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>🪢 횟수</Text>
+                              <Text style={styles.cardioCellValue}>{s.jumpCount}회</Text>
+                            </View>
+                          )}
+                          {s.stepCount !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>👣 걸음</Text>
+                              <Text style={styles.cardioCellValue}>{s.stepCount}</Text>
+                            </View>
+                          )}
+                          {s.floorCount !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>🪜 층수</Text>
+                              <Text style={styles.cardioCellValue}>{s.floorCount}층</Text>
+                            </View>
+                          )}
+                          {s.reps !== undefined && (
+                            <View style={styles.cardioCell}>
+                              <Text style={styles.cardioCellLabel}>🔁 횟수</Text>
+                              <Text style={styles.cardioCellValue}>{s.reps}회</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    ))}
                   </View>
-                  {ex.sets.map((s) => (
-                    <View key={s.setNumber} style={styles.tableRow}>
-                      <Text style={[styles.cell, { flex: 1 }]}>{s.setNumber}</Text>
-                      <Text style={[styles.cell, { flex: 2 }]}>
-                       {(s.weight ?? 0) > 0 ? s.weight : '-'}
-                      </Text>
-                      <Text style={[styles.cell, { flex: 2 }]}>{s.reps ?? 0}</Text>
-                      <Text style={[styles.cell, { flex: 1, color: '#10B981' }]}>
-                        {s.completed ? '✓' : ''}
-                      </Text>
+                ) : (
+                  // ===== Weight 테이블 (기존) =====
+                  <View style={styles.table}>
+                    <View style={styles.tableHeader}>
+                      <Text style={[styles.tableHeaderText, { flex: 1 }]}>세트</Text>
+                      <Text style={[styles.tableHeaderText, { flex: 2 }]}>무게(kg)</Text>
+                      <Text style={[styles.tableHeaderText, { flex: 2 }]}>횟수</Text>
+                      <Text style={[styles.tableHeaderText, { flex: 1 }]}>✓</Text>
                     </View>
-                  ))}
-                </View>
+                    {ex.sets.map((s) => (
+                      <View key={s.setNumber} style={styles.tableRow}>
+                        <Text style={[styles.cell, { flex: 1 }]}>{s.setNumber}</Text>
+                        <Text style={[styles.cell, { flex: 2 }]}>
+                          {(s.weight ?? 0) > 0 ? s.weight : '-'}
+                        </Text>
+                        <Text style={[styles.cell, { flex: 2 }]}>{s.reps ?? 0}</Text>
+                        <Text style={[styles.cell, { flex: 1, color: '#10B981' }]}>
+                          {s.completed ? '✓' : ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+
               </View>
             );
           })}
@@ -215,4 +300,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+    cardioRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  cardioCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  cardioCellLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  cardioCellValue: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
 });

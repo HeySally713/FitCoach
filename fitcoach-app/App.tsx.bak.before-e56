@@ -22,11 +22,7 @@ import { getMetByActivity, calculateCalories, calculatePace } from './src/utils/
 import { 
   BodyPart, 
   BODY_PART_OPTIONS, 
-  BODY_PART_EMOJI,
-  WorkoutIntensity,
-  INTENSITY_OPTIONS,
-  INTENSITY_EMOJI,
-  INTENSITY_LABEL,
+  BODY_PART_EMOJI 
 } from './src/types/workout';
 
 import { HistoryScreen } from './src/screens/HistoryScreen';
@@ -50,7 +46,6 @@ interface SetState {
 const WorkoutScreen = () => {
 const [selectedCategory, setSelectedCategory] = useState<string>('gym');
 const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-const [selectedIntensity, setSelectedIntensity] = useState<WorkoutIntensity | null>(null);
 const [sets, setSets] = useState<SetState[]>([
     { id: 1, weight: '', reps: '', done: false },
   ]);
@@ -99,14 +94,11 @@ useEffect(() => {
       setSets([...restoredSets, { id: restoredSets.length + 1, weight: '', reps: '', done: false }]);
       // 오늘 이미 분류된 부위가 있으면 그대로 사용
       setSelectedBodyPart(todayRecord.bodyPart || null);
-      setSelectedIntensity(todayRecord.intensity || null);  // ← 추가
-
     } else {
       setSets([{ id: 1, weight: '', reps: '', done: false }]);
       // 오늘 기록이 없으면 가장 최근 분류한 부위를 자동 선택
       const recentPart = await getRecentBodyPart(selectedExercise.id);
       setSelectedBodyPart(recentPart);
-      setSelectedIntensity(null);  // ← 추가
     }
   };
   loadTodayRecord();
@@ -196,10 +188,8 @@ const closeModal = () => {
   setSelectedExercise(null);
   setCurrentVideoId(null);
   setCardioDuration(null);
-  setSelectedBodyPart(null); 
-  setCardioFields({});  
-  setSelectedIntensity(null);  // ← 추가
-
+  setSelectedBodyPart(null);    // ← 이 줄 추가
+  setCardioFields({});  // ← 추가
   setSets([{ id: 1, weight: '', reps: '', done: false }]);
 };
 
@@ -232,8 +222,6 @@ const handleCompleteWorkout = async () => {
         category: selectedExercise.category,
         equipmentType: selectedExercise.equipmentType,
         bodyPart: selectedBodyPart || '유산소',
-        intensity: selectedIntensity || undefined,  // ← 추가
-
         sets: [{
           setNumber: 1,
           duration,
@@ -283,8 +271,6 @@ const handleCompleteWorkout = async () => {
       category: selectedExercise.category,
       equipmentType: selectedExercise.equipmentType,
       bodyPart: selectedBodyPart || undefined,
-      intensity: selectedIntensity || undefined,  // ← 추가
-
       sets: completedSets.map((s, idx) => ({
         setNumber: idx + 1, // 자동 이어붙이기 (1, 2, 3, ...)
         weight: parseFloat(s.weight) || 0,
@@ -416,41 +402,6 @@ const handleCompleteWorkout = async () => {
     })}
   </ScrollView>
 </View>
-
-{/* 운동 강도 선택 영역 */}
-<View style={styles.bodyPartSection}>
-  <Text style={styles.bodyPartLabel}>오늘 운동 강도</Text>
-  <ScrollView 
-    horizontal 
-    showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.bodyPartChipRow}
-  >
-    {INTENSITY_OPTIONS.map((level) => {
-      const isSelected = selectedIntensity === level;
-      return (
-        <TouchableOpacity
-          key={level}
-          style={[
-            styles.bodyPartChip,
-            isSelected && styles.bodyPartChipSelected,
-          ]}
-          onPress={() => 
-            setSelectedIntensity(isSelected ? null : level)
-          }
-          activeOpacity={0.7}
-        >
-          <Text style={[
-            styles.bodyPartChipText,
-            isSelected && styles.bodyPartChipTextSelected,
-          ]}>
-            {INTENSITY_EMOJI[level]} {INTENSITY_LABEL[level]}
-          </Text>
-        </TouchableOpacity>
-      );
-    })}
-  </ScrollView>
-</View>
-
 {/* Cardio 입력 폼 (cardio 운동일 때만 표시) */}
 {selectedExercise?.equipmentType === 'cardio' && (
   <CardioInputForm

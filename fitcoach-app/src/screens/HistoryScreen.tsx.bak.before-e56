@@ -32,16 +32,13 @@ import { groupSessionsByPeriod, formatRelativeDate } from '../utils/dateGroup';
  * - 모두 미분류: "⚪️ 미분류"
  */
 const buildBodyPartLabel = (
-  exercises: { bodyPart?: BodyPart; equipmentType?: string }[]
+  exercises: { bodyPart?: BodyPart }[]
 ): string => {
   const parts = new Set<string>();
   let hasUnclassified = false;
 
   exercises.forEach((e) => {
-    // cardio 운동은 bodyPart 없어도 '유산소'로 자동 분류
-    if (!e.bodyPart && e.equipmentType === 'cardio') {
-      parts.add(`${BODY_PART_EMOJI['유산소']} 유산소`);
-    } else if (e.bodyPart) {
+    if (e.bodyPart) {
       parts.add(`${BODY_PART_EMOJI[e.bodyPart]} ${e.bodyPart}`);
     } else {
       hasUnclassified = true;
@@ -59,7 +56,6 @@ const buildBodyPartLabel = (
   }
   return labels.join(' · ');
 };
-
 
 export const HistoryScreen = () => {
   const { sessions, loading, error, refresh } = useWorkoutHistory();
@@ -197,24 +193,10 @@ interface SessionCardProps {
 
 const SessionCard = ({ session, onPress }: SessionCardProps) => {
   const bodyPartLabel = buildBodyPartLabel(session.exercises);
-  
-  // 총 세트 수 (weight 운동만, cardio는 1세트로 카운트 안 함)
-  const totalSets = session.exercises.reduce((sum, ex) => {
-    if (ex.equipmentType === 'cardio') return sum;
-    return sum + ex.sets.length;
-  }, 0);
-  
-  // 총 칼로리 (cardio만)
-  const totalCalories = session.exercises.reduce((sum, ex) => {
-    return sum + ex.sets.reduce((s, set) => s + (set.calories || 0), 0);
-  }, 0);
-  
-  // 총 운동 시간 (cardio만, 분 단위)
-  const totalDuration = session.exercises.reduce((sum, ex) => {
-    if (ex.equipmentType !== 'cardio') return sum;
-    return sum + ex.sets.reduce((s, set) => s + (set.duration || 0), 0);
-  }, 0);
-  
+  const totalSets = session.exercises.reduce(
+    (sum, ex) => sum + ex.sets.length,
+    0
+  );
   const isToday = formatRelativeDate(session.date).startsWith('오늘');
 
   return (
@@ -230,37 +212,13 @@ const SessionCard = ({ session, onPress }: SessionCardProps) => {
           {bodyPartLabel} · {session.exercises.length}개 종목
         </Text>
         <View style={styles.exerciseList}>
-          {session.exercises.map((ex, idx) => {
-            const isCardio = ex.equipmentType === 'cardio';
-            // cardio: 시간/거리 표시
-            if (isCardio && ex.sets.length > 0) {
-              const set = ex.sets[0];
-              const parts: string[] = [];
-              if (set.duration) parts.push(`${set.duration}분`);
-              if (set.distance) parts.push(`${set.distance}km`);
-              if (set.calories) parts.push(`🔥${set.calories}kcal`);
-              return (
-                <Text key={idx} style={styles.exerciseLine}>
-                  • {ex.exerciseName} · {parts.join(' · ')}
-                </Text>
-              );
-            }
-            // weight: 세트 수
-            return (
-              <Text key={idx} style={styles.exerciseLine}>
-                • {ex.exerciseName} · {ex.sets.length}세트
-              </Text>
-            );
-          })}
+          {session.exercises.map((ex, idx) => (
+            <Text key={idx} style={styles.exerciseLine}>
+              • {ex.exerciseName} · {ex.sets.length}세트
+            </Text>
+          ))}
         </View>
-        {/* 메타 정보 - 세트수 + 시간 + 칼로리 */}
-        <Text style={styles.cardMeta}>
-          {totalSets > 0 && `🕐 총 ${totalSets}세트`}
-          {totalSets > 0 && totalDuration > 0 && '  ·  '}
-          {totalDuration > 0 && `⏱ ${totalDuration}분`}
-          {(totalSets > 0 || totalDuration > 0) && totalCalories > 0 && '  ·  '}
-          {totalCalories > 0 && `🔥 ${totalCalories}kcal`}
-        </Text>
+        <Text style={styles.cardMeta}>🕐 총 {totalSets}세트</Text>
       </View>
     </TouchableOpacity>
   );

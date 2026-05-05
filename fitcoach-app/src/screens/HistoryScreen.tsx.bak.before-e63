@@ -32,16 +32,13 @@ import { groupSessionsByPeriod, formatRelativeDate } from '../utils/dateGroup';
  * - 모두 미분류: "⚪️ 미분류"
  */
 const buildBodyPartLabel = (
-  exercises: { bodyPart?: BodyPart; equipmentType?: string }[]
+  exercises: { bodyPart?: BodyPart }[]
 ): string => {
   const parts = new Set<string>();
   let hasUnclassified = false;
 
   exercises.forEach((e) => {
-    // cardio 운동은 bodyPart 없어도 '유산소'로 자동 분류
-    if (!e.bodyPart && e.equipmentType === 'cardio') {
-      parts.add(`${BODY_PART_EMOJI['유산소']} 유산소`);
-    } else if (e.bodyPart) {
+    if (e.bodyPart) {
       parts.add(`${BODY_PART_EMOJI[e.bodyPart]} ${e.bodyPart}`);
     } else {
       hasUnclassified = true;
@@ -59,7 +56,6 @@ const buildBodyPartLabel = (
   }
   return labels.join(' · ');
 };
-
 
 export const HistoryScreen = () => {
   const { sessions, loading, error, refresh } = useWorkoutHistory();

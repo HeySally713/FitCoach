@@ -492,43 +492,6 @@ const handleCompleteWorkout = async () => {
   </ScrollView>
 </View>
 
-
-
-
-            </View>
-            <TouchableOpacity onPress={closeModal} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-<ScrollView style={styles.modalContent}>
-{/* Step C: 카디오 시간 선택 (cardio + duration 미선택 시) */}
-{selectedExercise?.equipmentType === 'cardio' && !cardioDuration && (
-  <View style={styles.videoContainer}>
-    <Text style={styles.videoTitle}> 운동 영상 참고 시간 선택</Text>
-    <Text style={styles.videoHelpText}>※ 칼로리 계산은 운동 시간 및 프로필 체중 기준입니다</Text>
-
-    <View style={styles.durationRow}>
-      {CARDIO_DURATIONS.map((d: CardioDuration) => (
-        <TouchableOpacity
-          key={d}
-          style={styles.durationBtn}
-          onPress={() => {
-          setCardioDuration(d);
-          // cardio 입력 폼의 시간 필드 자동 채움 (사용자가 이미 입력했으면 유지)
-          setCardioFields(prev => ({
-            ...prev,
-            duration: prev.duration ?? String(d),
-          }));
-        }}
-
-        >
-          <Text style={styles.durationBtnText}>{d}분</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  </View>
-)}
 {/* Cardio 입력 폼 (cardio 운동일 때만 표시) */}
 {selectedExercise?.equipmentType === 'cardio' && (
   <CardioInputForm
@@ -538,6 +501,33 @@ const handleCompleteWorkout = async () => {
     userWeightKg={userWeightKg}
   />
 )}
+
+
+            </View>
+            <TouchableOpacity onPress={closeModal} style={styles.closeBtn}>
+              <Text style={styles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+{/* Step C: 카디오 시간 선택 (cardio + duration 미선택 시) */}
+{selectedExercise?.equipmentType === 'cardio' && !cardioDuration && (
+  <View style={styles.videoContainer}>
+    <Text style={styles.videoTitle}>⏱ 운동 시간을 선택하세요</Text>
+    <View style={styles.durationRow}>
+      {CARDIO_DURATIONS.map((d: CardioDuration) => (
+        <TouchableOpacity
+          key={d}
+          style={styles.durationBtn}
+          onPress={() => setCardioDuration(d)}
+        >
+          <Text style={styles.durationBtnText}>{d}분</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  </View>
+)}
+
 {/* Step C: 영상 플레이어 + 영상 리스트 (시간 선택 완료 또는 비-cardio) */}
 {(selectedExercise?.equipmentType !== 'cardio' || cardioDuration) && (
   <View style={styles.videoContainer}>
@@ -633,8 +623,8 @@ const handleCompleteWorkout = async () => {
   </View>
 )}
 
-            {/* 운동 기록 섹션 (weight 운동만) */}
-            {selectedExercise?.equipmentType !== 'cardio' && (
+
+            {/* 운동 기록 섹션 */}
             <View style={styles.recordContainer}>
               <Text style={styles.recordTitle}>✍️ 세트 기록</Text>
               
@@ -670,6 +660,7 @@ const handleCompleteWorkout = async () => {
                     value={set.reps}
                     onChangeText={(value) => updateSet(set.id, 'reps', value)}
                     editable={true}
+
                   />
                   <TouchableOpacity 
                     style={[styles.checkBtn, set.done && styles.checkBtnDone]}
@@ -684,22 +675,23 @@ const handleCompleteWorkout = async () => {
               <TouchableOpacity style={styles.addSetBtn} onPress={addSet}>
                 <Text style={styles.addSetBtnText}>+ 세트 추가</Text>
               </TouchableOpacity>
-            </View>
-            )}
 
-            {/* 운동 완료 버튼 (cardio/weight 공통) */}
-            <TouchableOpacity 
-              style={styles.completeButton}
-              onPress={handleCompleteWorkout}
-            >
-              <Text style={styles.completeButtonText}>💾 운동 완료</Text>
-            </TouchableOpacity>
+              {/* 운동 완료 버튼 */}
+
+                        <TouchableOpacity 
+            style={styles.completeButton}
+            onPress={handleCompleteWorkout}
+          >
+            <Text style={styles.completeButtonText}>💾 운동 완료</Text>
+          </TouchableOpacity>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 };
+
 // 나머지 탭 화면들 (임시)
 const VideoScreen = () => (
   <View style={[styles.screen, styles.centerContent]}>
@@ -824,12 +816,6 @@ streakBadgeText: {
   color: '#F59E0B',
   fontSize: 13,
   fontWeight: '700',
-},
-videoHelpText: {
-  color: '#94A3B8',
-  fontSize: 12,
-  marginTop: 4,
-  marginBottom: 8,
 },
 
   

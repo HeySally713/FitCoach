@@ -15,9 +15,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert, 
-  SafeAreaView,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useWorkoutHistory } from '../hooks/useWorkoutHistory';
 import { groupSessionsByPeriod, formatRelativeDate } from '../utils/dateGroup';

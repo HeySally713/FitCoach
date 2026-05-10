@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getProfile, saveProfile } from '../services/profile';
@@ -26,6 +27,7 @@ import {
 } from '../types/profile';
 import { useWorkoutHistory } from '../hooks/useWorkoutHistory';
 import { calculateStreak, didWorkoutToday } from '../utils/streak';
+import { exportAllData } from '../utils/dataBackup';
 
 export const MyPageScreen = () => {
   const { sessions, loading: sessionsLoading } = useWorkoutHistory();
@@ -129,6 +131,20 @@ export const MyPageScreen = () => {
             <Text style={styles.streakHint}>오늘 운동하고 스트릭 시작하세요!</Text>
           )}
         </View>
+
+
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#475569',
+            padding: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            marginTop: 12,
+          }}
+          onPress={handleBackup}
+        >
+          <Text style={{ color: '#F8FAFC', fontWeight: '600' }}>💾 데이터 백업</Text>
+        </TouchableOpacity>
 
         {/* 기본 정보 카드 */}
         <View style={styles.card}>
@@ -303,6 +319,39 @@ export const MyPageScreen = () => {
     </SafeAreaView>
   );
 };
+
+const handleBackup = async () => {
+  try {
+    const bundle = await exportAllData();
+    const json = JSON.stringify(bundle, null, 2);
+
+    // Log to terminal (visible in `expo start` output)
+    console.log('========== FITCOACH BACKUP START ==========');
+    console.log(json);
+    console.log('========== FITCOACH BACKUP END ==========');
+
+    // Also try the native share sheet so you can save to Files/Email/etc.
+    try {
+      await Share.share({
+        message: json,
+        title: `FitCoach Backup ${new Date().toISOString().slice(0,10)}`,
+      });
+    } catch {
+      // Share unavailable — fall back to alert with summary
+    }
+
+    const keyCount = Object.keys(bundle.data).length;
+    const sessionCount = (bundle.data['@FitCoach/workoutSessions'] as any[])?.length ?? 0;
+    Alert.alert(
+      '백업 완료 ✅',
+      `${keyCount}개 키 / ${sessionCount}개 세션 내보냄.\n\n터미널 로그를 복사해 안전한 곳에 저장하세요.`,
+    );
+  } catch (e) {
+    console.error('[Backup] error:', e);
+    Alert.alert('백업 실패', String(e));
+  }
+};
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0F172A' },

@@ -10,12 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getProfile } from '../services/profile';
-import { generateWeeklyPlan, getISOWeek } from '../services/recommendation';
+import { generateWeeklyPlan } from '../services/recommendation';
 import { WeeklyPlan } from '../types/recommendation';
 
 interface Props {
   onClose?: () => void;
-  onSelectExercise?: (exerciseId: string) => void;
 }
 
 const SPLIT_LABELS: Record<string, string> = {
@@ -35,35 +34,34 @@ const GOAL_LABELS: Record<string, string> = {
   maintenance: '⚖️ 현상유지',
 };
 
-export const RecommendationScreen: React.FC<Props> = ({ onClose, onSelectExercise }) => {
+export const RecommendationScreen: React.FC<Props> = ({ onClose }) => {
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-const generate = useCallback(async (manual = false) => {
-  setLoading(true);
-  setError(null);
-  try {
-    const profile = await getProfile();
-    if (!profile.goal) {
-      setError('마이페이지에서 운동 목표를 먼저 설정해주세요.');
-      setPlan(null);
-      return;
+  const regenerate = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const profile = await getProfile();
+      if (!profile.goal) {
+        setError('마이페이지에서 운동 목표를 먼저 설정해주세요.');
+        setPlan(null);
+        return;
+      }
+      const generated = generateWeeklyPlan(profile);
+      setPlan(generated);
+    } catch (e) {
+      console.error('[Recommendation] generate error:', e);
+      setError('추천을 생성하지 못했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
     }
-    const generated = generateWeeklyPlan(profile, { manualReroll: manual });
-    setPlan(generated);
-  } catch (e) {
-    console.error('[Recommendation] generate error:', e);
-    setError('추천을 생성하지 못했습니다. 다시 시도해주세요.');
-  } finally {
-    setLoading(false);
-  }
-}, []);
+  }, []);
 
-useEffect(() => {
-  generate(false);   // initial load uses weekly seed
-}, [generate]);
-
+  useEffect(() => {
+    regenerate();
+  }, [regenerate]);
 
   // Loading state
   if (loading) {
@@ -93,10 +91,9 @@ useEffect(() => {
           <Text style={styles.errorText}>
             {error ?? '추천 생성 실패. 프로필을 먼저 설정해주세요.'}
           </Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={() => generate(false)}>
-              <Text style={styles.retryText}>🔄 다시 시도</Text>
-            </TouchableOpacity>
-
+          <TouchableOpacity style={styles.retryBtn} onPress={regenerate}>
+            <Text style={styles.retryText}>🔄 다시 시도</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -108,10 +105,9 @@ useEffect(() => {
       <View style={styles.headerRow}>
         <Text style={styles.title}>📋 주간 운동 루틴</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.regenBtn} onPress={() => generate(true)}>
+          <TouchableOpacity style={styles.regenBtn} onPress={regenerate}>
             <Text style={styles.regenText}>🔄 재생성</Text>
           </TouchableOpacity>
-
           {onClose && (
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <Text style={styles.closeText}>✕</Text>
@@ -139,16 +135,9 @@ useEffect(() => {
           <Text style={styles.summarySub}>
             예상 총 칼로리: {plan.days.reduce((s, d) => s + d.estimatedCalories, 0)} kcal / 주
           </Text>
-          <Text style={styles.summarySub}>
-          📆 {new Date().getFullYear()}년 {getISOWeek(new Date())}주차 루틴
-          </Text>
-
         </View>
 
         {/* Days */}
-        {onSelectExercise && (
-          <Text style={styles.hint}>💡 운동을 탭하면 바로 기록할 수 있어요</Text>
-        )}
         {plan.days.map((day, i) => (
           <View key={i} style={styles.dayCard}>
             <View style={styles.dayHeader}>
@@ -162,34 +151,23 @@ useEffect(() => {
               <Text style={styles.emptyText}>해당 조건에 맞는 운동이 없습니다.</Text>
             ) : (
               day.exercises.map((ex, j) => (
-                <TouchableOpacity
-                  key={j}
-                  style={styles.exRow}
-                  onPress={() => onSelectExercise?.(ex.exerciseId)}
-                  activeOpacity={onSelectExercise ? 0.6 : 1}
-                  disabled={!onSelectExercise}
-                >
+                <View key={j} style={styles.exRow}>
                   <View style={styles.exHeader}>
                     <Text style={styles.exName}>
                       {j + 1}. {ex.nameKo}
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={styles.exCategory}>
-                        {ex.category === 'gym' ? '🏋️' :
-                         ex.category === 'home' ? '🏠' :
-                         ex.category === 'cardio' ? '🏃' : '🧘'}
-                      </Text>
-                      {onSelectExercise && (
-                        <Text style={{ color: '#3B82F6', fontSize: 14, marginLeft: 6, fontWeight: '700' }}>›</Text>
-                      )}
-                    </View>
+                    <Text style={styles.exCategory}>
+                      {ex.category === 'gym' ? '🏋️' :
+                       ex.category === 'home' ? '🏠' :
+                       ex.category === 'cardio' ? '🏃' : '🧘'}
+                    </Text>
                   </View>
                   <Text style={styles.exMeta}>
                     {ex.sets}세트 × {ex.reps}
                     {ex.restSec > 0 ? ` · 휴식 ${ex.restSec}초` : ''}
                   </Text>
                   {ex.notes && <Text style={styles.exNote}>💡 {ex.notes}</Text>}
-                </TouchableOpacity>
+                </View>
               ))
             )}
           </View>
@@ -304,14 +282,6 @@ const styles = StyleSheet.create({
   exMeta: { color: '#94A3B8', fontSize: 13, marginTop: 2 },
   exNote: { color: '#FBBF24', fontSize: 12, marginTop: 4, fontStyle: 'italic' },
   emptyText: { color: '#64748B', fontSize: 13, textAlign: 'center', paddingVertical: 12 },
-
-  hint: {
-  color: '#94A3B8',
-  fontSize: 12,
-  textAlign: 'center',
-  marginBottom: 10,
-  fontStyle: 'italic',
-},
 
   notesCard: {
     backgroundColor: '#1E293B',

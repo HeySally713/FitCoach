@@ -14,7 +14,7 @@ export interface Exercise {
   equipmentType: EquipmentType;
   target: string;
   level: ExerciseLevel;
-  videoId: string;
+  videoId?: string;
 }
 
 export type CardioDuration = 10 | 20 | 30 | 40;

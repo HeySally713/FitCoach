@@ -1,6 +1,4 @@
-import { ExerciseFilterBar } from './src/components/ExerciseFilterBar';
-import { EXERCISES_BY_CATEGORY, EXERCISES_BY_CATEGORY_SEARCHABLE, ExerciseSearchable, ALL_EXERCISES } from './src/utils/exerciseAdapter';
-import { Exercise, CARDIO_DURATIONS, CardioDuration, ExerciseLevel } from './src/types/exercise';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { useExerciseVideos } from './src/hooks/useExerciseVideos';
 import { ExerciseVideo, SearchVideosParams } from './src/services/youtube';
-
+import { Exercise, CARDIO_DURATIONS, CardioDuration } from './src/types/exercise';
 import { 
   saveExercise, 
   getTodayExercise, 
@@ -42,7 +40,6 @@ import { RecommendationScreen } from './src/screens/RecommendationScreen';
 
 
 
-
 const Tab = createBottomTabNavigator();
 
 interface SetState {
@@ -57,16 +54,7 @@ interface SetState {
 
 // 🏋️ 운동기록 화면 (메인 기능)
 const WorkoutScreen = () => {
-const [searchText, setSearchText] = useState('');
-const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
-const [selectedLevel, setSelectedLevel] = useState<ExerciseLevel | null>(null);
 const [selectedCategory, setSelectedCategory] = useState<string>('gym');
-  useEffect(() => {
-  setSearchText('');
-  setSelectedEquipment(null);
-  setSelectedLevel(null);
-}, [selectedCategory]);
-
 const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 const [selectedIntensity, setSelectedIntensity] = useState<WorkoutIntensity | null>(null);
 const [sets, setSets] = useState<SetState[]>([
@@ -181,32 +169,43 @@ useEffect(() => {
     { key: 'yoga', label: '🧘 요가' },
     { key: 'cardio', label: '🏃 유산소' },
   ];
-const exercises: Record<string, Exercise[]> = EXERCISES_BY_CATEGORY;
 
-const sourceExercises: ExerciseSearchable[] = EXERCISES_BY_CATEGORY_SEARCHABLE[selectedCategory] ?? [];
+const exercises: Record<string, Exercise[]> = {
+  gym: [
+    { id: '1', name: '인클라인 덤벨 프레스', category: 'gym', equipmentType: 'freeweight', target: '가슴, 어깨', level: '중급', videoId: 'jZOywn1qArI' },
+    { id: '2', name: '벤치프레스', category: 'gym', equipmentType: 'freeweight', target: '가슴', level: '중급', videoId: 'vthMCtgVtFw' },
+    { id: '3', name: '스쿼트', category: 'gym', equipmentType: 'freeweight', target: '하체, 둔근', level: '중급', videoId: 'Fk9j6pQ6zjc' },
+    { id: '4', name: '데드리프트', category: 'gym', equipmentType: 'freeweight', target: '등, 하체', level: '고급', videoId: 'op9kVnSso6Q' },
+  ],
+  home: [
+    { id: '6', name: '플랭크', category: 'home', equipmentType: 'bodyweight', target: '코어', level: '초급', videoId: 'ASdvN_XEl_c' },
+    { id: '7', name: '버피', category: 'home', equipmentType: 'bodyweight', target: '전신', level: '중급', videoId: 'TU8QYVW0gDU' },
+    { id: '8', name: '푸시업', category: 'home', equipmentType: 'bodyweight', target: '가슴, 삼두', level: '초급', videoId: 'IODxDxX7oi4' },
+    { id: 'h_hk', name: '하이니 (High Knee)', category: 'home', equipmentType: 'bodyweight', target: '하체+심폐', level: '중급', videoId: 'OAJ_J3EZkdY' },
+    { id: 'h_js', name: '점핑잭', category: 'home', equipmentType: 'bodyweight', target: '전신+심폐', level: '초급', videoId: 'c4DAnQ6DtF8' },
 
-const availableEquipment = Array.from(
-  new Set(sourceExercises.map(e => e.equipment))
-).sort();
+  ],
+  yoga: [
+    { id: '9', name: '태양경배', category: 'yoga', equipmentType: 'yoga', target: '전신 스트레칭', level: '초급', videoId: '1wjZqLw8oI0' },
+    { id: '10', name: '다운독', category: 'yoga', equipmentType: 'yoga', target: '어깨, 햄스트링', level: '초급', videoId: 'VpP7zW4wJo4' },
+  ],
+  cardio: [
+    { id: '11', name: 'HIIT 운동', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '12', name: '러닝머신', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '초급', videoId: '9L2b2khySLE' },
+    { id: '13', name: '사이클', category: 'cardio', equipmentType: 'cardio', target: '하체, 심폐', level: '초급', videoId: '9L2b2khySLE' },
+        { id: '14', name: '인클라인 트레드밀', category: 'cardio', equipmentType: 'cardio', target: '심폐+하체', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '15', name: '야외 러닝', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '16', name: '걷기', category: 'cardio', equipmentType: 'cardio', target: '심폐지구력', level: '초급', videoId: '9L2b2khySLE' },
+    { id: '17', name: '줄넘기', category: 'cardio', equipmentType: 'cardio', target: '심폐+종아리', level: '초급', videoId: '9L2b2khySLE' },
+    { id: '18', name: '스텝머신', category: 'cardio', equipmentType: 'cardio', target: '하체+심폐', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '19', name: '천국의 계단', category: 'cardio', equipmentType: 'cardio', target: '하체+심폐', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '20', name: '하이니 (High Knee)', category: 'cardio', equipmentType: 'cardio', target: '하체+심폐', level: '중급', videoId: '9L2b2khySLE' },
+    { id: '21', name: '점핑잭', category: 'cardio', equipmentType: 'cardio', target: '전신+심폐', level: '초급', videoId: '9L2b2khySLE' },
 
-const currentExercises: ExerciseSearchable[] = sourceExercises.filter(e => {
-  // search text matches name (ko/en) or any muscle
-  if (searchText.trim()) {
-    const q = searchText.toLowerCase().trim();
-    const haystack = [
-      e.name.toLowerCase(),
-      e.nameEn.toLowerCase(),
-      ...e.primaryMuscles.map(m => m.toLowerCase()),
-    ].join(' ');
-    if (!haystack.includes(q)) return false;
-  }
-  // equipment filter
-  if (selectedEquipment && e.equipment !== selectedEquipment) return false;
-  // level filter
-  if (selectedLevel && e.level !== selectedLevel) return false;
-  return true;
-});
+  ],
+};
 
+const currentExercises: Exercise[] = exercises[selectedCategory] || [];
 
 
 const toggleSetDone = (id: number) => {
@@ -403,17 +402,6 @@ const handleCompleteWorkout = async () => {
           </TouchableOpacity>
         ))}
       </ScrollView>
-
-      <ExerciseFilterBar
-        searchText={searchText}
-        onSearchChange={setSearchText}
-        selectedEquipment={selectedEquipment}
-        onEquipmentChange={setSelectedEquipment}
-        selectedLevel={selectedLevel}
-        onLevelChange={setSelectedLevel}
-        availableEquipment={availableEquipment}
-        resultCount={currentExercises.length}
-/>
 
       {/* 운동 리스트 */}
       <ScrollView style={styles.exerciseList}>
@@ -726,34 +714,14 @@ const handleCompleteWorkout = async () => {
       </Modal>
 
       {/* AI 추천 모달 — 운동 모달과 형제 (sibling) */}
-<Modal
-  visible={recommendModalVisible}
-  animationType="slide"
-  presentationStyle="fullScreen"
-  onRequestClose={() => setRecommendModalVisible(false)}
->
-  <RecommendationScreen
-    onClose={() => setRecommendModalVisible(false)}
-    onSelectExercise={(exerciseId) => {
-      // Find the exercise in the unified DB
-      const exercise = ALL_EXERCISES.find(e => e.id === exerciseId);
-      if (!exercise) {
-        console.warn('[Recommendation] exercise not found:', exerciseId);
-        return;
-      }
-      // Switch to correct category tab so context matches
-      setSelectedCategory(exercise.category);
-      // Close recommendation modal
-      setRecommendModalVisible(false);
-      // Open the existing exercise detail modal
-      // (small delay so the recommendation modal finishes its slide-down)
-      setTimeout(() => {
-        setSelectedExercise(exercise);
-      }, 300);
-    }}
-  />
-</Modal>
-
+      <Modal
+        visible={recommendModalVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setRecommendModalVisible(false)}
+      >
+        <RecommendationScreen onClose={() => setRecommendModalVisible(false)} />
+      </Modal>
 
     </SafeAreaView>
   );

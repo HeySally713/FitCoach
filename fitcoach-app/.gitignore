@@ -42,3 +42,4 @@ yarn-error.*
 
 # Generated exercise DB (run 'node seed/convert_seed.js' to regenerate)
 src/data/exerciseDB.json
+backups/

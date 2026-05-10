@@ -7,43 +7,6 @@ import {
 import { EXERCISES, getGoalTarget, findById } from '../data/exerciseDB';
 
 // ─────────────────────────────────────────
-// 0. SEEDED RANDOMNESS for weekly rotation
-// ─────────────────────────────────────────
-
-// Simple deterministic PRNG (Mulberry32). Same seed → same sequence.
-const seededRandom = (seed: number) => {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6D2B79F5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-};
-
-// Returns the ISO week number (1-53) of a given date.
-// Same week (Mon-Sun) → same number.
-export const getISOWeek = (d: Date): number => {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7; // Mon=1..Sun=7
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-};
-
-// Build a stable seed from year + week + goal + frequency.
-// Goal/frequency are mixed in so different users with different goals
-// don't all see the same exact rotation each week.
-const buildWeeklySeed = (date: Date, goal: string, frequency: number): number => {
-  const week = getISOWeek(date);
-  const year = date.getFullYear();
-  const goalHash = goal.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
-  return Math.abs(year * 1000 + week * 13 + goalHash + frequency * 7);
-};
-
-
-// ─────────────────────────────────────────
 // 1. FILTER — environment, difficulty, safety
 // ─────────────────────────────────────────
 const DIFFICULTY_RANK: Record<ExperienceLevel, number> = { '초급': 1, '중급': 2, '고급': 3 };
@@ -136,19 +99,15 @@ const pickForPatterns = (
   goal: FitnessGoal,
   preferredParts: string[],
   excludeIds: Set<string>,
-  rng: () => number,        // ← NEW
 ): DBExercise[] => {
   const picked: DBExercise[] = [];
   const usedPatterns = new Set<MovementPattern>();
 
-  // Score + small random jitter so ties shuffle deterministically per week
+  // Sort candidates by score desc
   const ranked = pool
     .filter(ex => patterns.includes(ex.movement_pattern))
     .filter(ex => !excludeIds.has(ex.exercise_id))
-    .map(ex => ({
-      ex,
-      score: scoreExercise(ex, goal, preferredParts) + rng() * 1.5,  // ← jitter
-    }))
+    .map(ex => ({ ex, score: scoreExercise(ex, goal, preferredParts) }))
     .sort((a, b) => b.score - a.score);
 
   // First pass: one per unique pattern (diversity)
@@ -159,7 +118,7 @@ const pickForPatterns = (
       usedPatterns.add(ex.movement_pattern);
     }
   }
-  // Second pass: fill remaining
+  // Second pass: fill remaining slots with next best
   for (const { ex } of ranked) {
     if (picked.length >= count) break;
     if (!picked.includes(ex)) picked.push(ex);
@@ -230,34 +189,24 @@ const buildDay = (
   label: string, focus: string, patterns: MovementPattern[], count: number,
   pool: DBExercise[], target: GoalTarget, goal: FitnessGoal,
   preferredParts: string[], excludeIds: Set<string>, userWeightKg: number,
-  rng: () => number,         // ← NEW
   prescribe: (ex: DBExercise) => RoutineExercise = (ex) => prescribeStrength(ex, target),
 ): DailyWorkout => {
-  const picks = pickForPatterns(pool, patterns, count, goal, preferredParts, excludeIds, rng);
+  const picks = pickForPatterns(pool, patterns, count, goal, preferredParts, excludeIds);
   picks.forEach(p => excludeIds.add(p.exercise_id));
   const exercises = picks.map(prescribe);
   const { min, kcal } = estimateDay(exercises, userWeightKg);
   return { dayLabel: label, focus, exercises, estimatedDurationMin: min, estimatedCalories: kcal };
 };
 
-
 // ─────────────────────────────────────────
 // 8. MAIN ENTRY POINT
 // ─────────────────────────────────────────
-export const generateWeeklyPlan = (
-  profile: UserProfile,
-  options?: { manualReroll?: boolean }      // ← NEW
-): WeeklyPlan => {
+export const generateWeeklyPlan = (profile: UserProfile): WeeklyPlan => {
   const goal = profile.goal ?? 'health';
   const frequency = profile.weeklyFrequency ?? 3;
   const userWeightKg = profile.weightKg;
   const preferredParts = profile.preferredBodyParts ?? [];
   const target = getGoalTarget(goal) ?? getGoalTarget('health')!;
-
-  // Seed: weekly by default, randomized when user manually rerolls
-  const baseSeed = buildWeeklySeed(new Date(), goal, frequency);
-  const seed = options?.manualReroll ? baseSeed + Math.floor(Math.random() * 9999) : baseSeed;
-  const rng = seededRandom(seed);
 
   const pool = filterCandidates(profile);
   const splitType = chooseSplit(goal, frequency);
@@ -275,7 +224,6 @@ export const generateWeeklyPlan = (
       days.push(buildDay(
         labelFor(i), '요가/유연성', PATTERN_GROUPS.flex, 6,
         pool, target, goal, preferredParts, used, userWeightKg,
-        rng, 
         prescribeFlexibility,
       ));
     }
@@ -288,7 +236,6 @@ export const generateWeeklyPlan = (
         cardioDay ? PATTERN_GROUPS.cardio : [...PATTERN_GROUPS.full, ...PATTERN_GROUPS.core],
         cardioDay ? 1 : 5,
         pool, target, goal, preferredParts, used, userWeightKg,
-        rng, 
         cardioDay ? (ex) => prescribeCardio(ex, cardioPerSession || 30) : undefined,
       ));
     }
@@ -297,11 +244,10 @@ export const generateWeeklyPlan = (
       const day = buildDay(
         labelFor(i * 2), `전신 ${i+1}`, PATTERN_GROUPS.full, 5,
         pool, target, goal, preferredParts, used, userWeightKg,
-        rng, 
       );
       // Add cardio finisher if goal needs it
       if (cardioPerSession > 0) {
-        const cardioPicks = pickForPatterns(pool, PATTERN_GROUPS.cardio, 1, goal, preferredParts, used, rng);
+        const cardioPicks = pickForPatterns(pool, PATTERN_GROUPS.cardio, 1, goal, preferredParts, used);
         cardioPicks.forEach(c => {
           used.add(c.exercise_id);
           day.exercises.push(prescribeCardio(c, cardioPerSession));
@@ -319,7 +265,6 @@ export const generateWeeklyPlan = (
       days.push(buildDay(
         labelFor(i), focus, PATTERN_GROUPS[kind], 5,
         pool, target, goal, preferredParts, used, userWeightKg,
-        rng, 
       ));
     });
   } else if (splitType === 'push_pull_legs') {
@@ -331,7 +276,6 @@ export const generateWeeklyPlan = (
       days.push(buildDay(
         labelFor(i), focus, PATTERN_GROUPS[kind] ?? PATTERN_GROUPS.full, 5,
         pool, target, goal, preferredParts, used, userWeightKg,
-        rng, 
       ));
     });
     // PPL repeats - reset 'used' between mesocycles to allow same compounds
@@ -367,5 +311,3 @@ export const generateWeeklyPlan = (
     generatedAt: new Date().toISOString(),
   };
 };
-
-

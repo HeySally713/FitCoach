@@ -1,6 +1,4 @@
-import { ExerciseFilterBar } from './src/components/ExerciseFilterBar';
-import { EXERCISES_BY_CATEGORY, EXERCISES_BY_CATEGORY_SEARCHABLE, ExerciseSearchable, ALL_EXERCISES } from './src/utils/exerciseAdapter';
-import { Exercise, CARDIO_DURATIONS, CardioDuration, ExerciseLevel } from './src/types/exercise';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,7 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { useExerciseVideos } from './src/hooks/useExerciseVideos';
 import { ExerciseVideo, SearchVideosParams } from './src/services/youtube';
-
+import { EXERCISES_BY_CATEGORY } from './src/utils/exerciseAdapter';
+import { Exercise, CARDIO_DURATIONS, CardioDuration } from './src/types/exercise';
 import { 
   saveExercise, 
   getTodayExercise, 
@@ -57,16 +56,7 @@ interface SetState {
 
 // 🏋️ 운동기록 화면 (메인 기능)
 const WorkoutScreen = () => {
-const [searchText, setSearchText] = useState('');
-const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
-const [selectedLevel, setSelectedLevel] = useState<ExerciseLevel | null>(null);
 const [selectedCategory, setSelectedCategory] = useState<string>('gym');
-  useEffect(() => {
-  setSearchText('');
-  setSelectedEquipment(null);
-  setSelectedLevel(null);
-}, [selectedCategory]);
-
 const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 const [selectedIntensity, setSelectedIntensity] = useState<WorkoutIntensity | null>(null);
 const [sets, setSets] = useState<SetState[]>([
@@ -183,30 +173,7 @@ useEffect(() => {
   ];
 const exercises: Record<string, Exercise[]> = EXERCISES_BY_CATEGORY;
 
-const sourceExercises: ExerciseSearchable[] = EXERCISES_BY_CATEGORY_SEARCHABLE[selectedCategory] ?? [];
-
-const availableEquipment = Array.from(
-  new Set(sourceExercises.map(e => e.equipment))
-).sort();
-
-const currentExercises: ExerciseSearchable[] = sourceExercises.filter(e => {
-  // search text matches name (ko/en) or any muscle
-  if (searchText.trim()) {
-    const q = searchText.toLowerCase().trim();
-    const haystack = [
-      e.name.toLowerCase(),
-      e.nameEn.toLowerCase(),
-      ...e.primaryMuscles.map(m => m.toLowerCase()),
-    ].join(' ');
-    if (!haystack.includes(q)) return false;
-  }
-  // equipment filter
-  if (selectedEquipment && e.equipment !== selectedEquipment) return false;
-  // level filter
-  if (selectedLevel && e.level !== selectedLevel) return false;
-  return true;
-});
-
+const currentExercises: Exercise[] = exercises[selectedCategory] || [];
 
 
 const toggleSetDone = (id: number) => {
@@ -403,17 +370,6 @@ const handleCompleteWorkout = async () => {
           </TouchableOpacity>
         ))}
       </ScrollView>
-
-      <ExerciseFilterBar
-        searchText={searchText}
-        onSearchChange={setSearchText}
-        selectedEquipment={selectedEquipment}
-        onEquipmentChange={setSelectedEquipment}
-        selectedLevel={selectedLevel}
-        onLevelChange={setSelectedLevel}
-        availableEquipment={availableEquipment}
-        resultCount={currentExercises.length}
-/>
 
       {/* 운동 리스트 */}
       <ScrollView style={styles.exerciseList}>
@@ -726,34 +682,14 @@ const handleCompleteWorkout = async () => {
       </Modal>
 
       {/* AI 추천 모달 — 운동 모달과 형제 (sibling) */}
-<Modal
-  visible={recommendModalVisible}
-  animationType="slide"
-  presentationStyle="fullScreen"
-  onRequestClose={() => setRecommendModalVisible(false)}
->
-  <RecommendationScreen
-    onClose={() => setRecommendModalVisible(false)}
-    onSelectExercise={(exerciseId) => {
-      // Find the exercise in the unified DB
-      const exercise = ALL_EXERCISES.find(e => e.id === exerciseId);
-      if (!exercise) {
-        console.warn('[Recommendation] exercise not found:', exerciseId);
-        return;
-      }
-      // Switch to correct category tab so context matches
-      setSelectedCategory(exercise.category);
-      // Close recommendation modal
-      setRecommendModalVisible(false);
-      // Open the existing exercise detail modal
-      // (small delay so the recommendation modal finishes its slide-down)
-      setTimeout(() => {
-        setSelectedExercise(exercise);
-      }, 300);
-    }}
-  />
-</Modal>
-
+      <Modal
+        visible={recommendModalVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setRecommendModalVisible(false)}
+      >
+        <RecommendationScreen onClose={() => setRecommendModalVisible(false)} />
+      </Modal>
 
     </SafeAreaView>
   );

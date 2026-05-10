@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Generated exercise DB (run 'node seed/convert_seed.js' to regenerate)
+src/data/exerciseDB.json

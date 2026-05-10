@@ -35,6 +35,7 @@ import { MyPageScreen } from './src/screens/MyPageScreen';
 import { getProfile } from './src/services/profile';
 import { calculateStreak } from './src/utils/streak';
 import { getAllSessions } from './src/services/storage';
+import { RecommendationScreen } from './src/screens/RecommendationScreen';
 
 
 
@@ -59,7 +60,7 @@ const [selectedIntensity, setSelectedIntensity] = useState<WorkoutIntensity | nu
 const [sets, setSets] = useState<SetState[]>([
     { id: 1, weight: '', reps: '', done: false },
   ]);
-
+const [recommendModalVisible, setRecommendModalVisible] = useState(false);
 // Step C: 영상 선택 + 카디오 시간 선택 상태
 const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
 const [cardioDuration, setCardioDuration] = useState<CardioDuration | null>(null);
@@ -67,6 +68,7 @@ const [cardioDuration, setCardioDuration] = useState<CardioDuration | null>(null
 const [selectedBodyPart, setSelectedBodyPart] = useState<BodyPart | null>(null);
 const [cardioFields, setCardioFields] = useState<CardioFields>({});
 const [streak, setStreak] = useState<number>(0);
+
 
 // 스트릭 로드 (운동 탭 진입 시)
 useFocusEffect(
@@ -355,12 +357,24 @@ const handleCompleteWorkout = async () => {
       {/* 헤더 */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>운동</Text>
-        {streak > 0 && (
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakBadgeText}>🔥 {streak}일</Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            style={{ backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}
+            onPress={() => {
+              console.log('[DEBUG] AI button tapped, opening modal');
+              setRecommendModalVisible(true);
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>🤖 AI 추천</Text>
+          </TouchableOpacity>
+          {streak > 0 && (
+            <View style={{ backgroundColor: '#1E293B', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#F97316' }}>
+              <Text style={{ color: '#F97316', fontSize: 13, fontWeight: '700' }}>🔥 {streak}일</Text>
+            </View>
+          )}
+        </View>
       </View>
+
 
 
       {/* 카테고리 버튼 */}
@@ -695,11 +709,24 @@ const handleCompleteWorkout = async () => {
               <Text style={styles.completeButtonText}>💾 운동 완료</Text>
             </TouchableOpacity>
           </ScrollView>
+
         </SafeAreaView>
       </Modal>
+
+      {/* AI 추천 모달 — 운동 모달과 형제 (sibling) */}
+      <Modal
+        visible={recommendModalVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setRecommendModalVisible(false)}
+      >
+        <RecommendationScreen onClose={() => setRecommendModalVisible(false)} />
+      </Modal>
+
     </SafeAreaView>
   );
 };
+
 // 나머지 탭 화면들 (임시)
 const VideoScreen = () => (
   <View style={[styles.screen, styles.centerContent]}>

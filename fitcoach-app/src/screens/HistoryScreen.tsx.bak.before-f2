@@ -22,9 +22,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useWorkoutHistory } from '../hooks/useWorkoutHistory';
 import { groupSessionsByPeriod, formatRelativeDate } from '../utils/dateGroup';
 //import { inferSessionBodyPart, getBodyPartEmoji } from '../utils/bodyPart';
-import { StatsPeriod } from '../utils/stats';
-import { StatsView } from '../components/StatsView';
-import { getProfile } from '../services/profile';
 
 
 /**
@@ -66,22 +63,7 @@ const buildBodyPartLabel = (
 
 export const HistoryScreen = () => {
   const { sessions, loading, error, refresh } = useWorkoutHistory();
-  const [weeklyGoal, setWeeklyGoal] = useState<number>(3);
-
-    useFocusEffect(() => {
-      (async () => {
-        try {
-          const profile = await getProfile();
-          setWeeklyGoal(profile.weeklyFrequency ?? 3);
-        } catch (e) {
-          console.error('[HistoryScreen] 프로필 로드 실패:', e);
-        }
-      })();
-    }, );
-
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
-  const [viewMode, setViewMode] = useState<'history' | 'stats'>('history');
-  const [period, setPeriod] = useState<StatsPeriod>('week');
 
 
   // 화면에 진입할 때마다 새로고침 (다른 탭에서 운동 기록 후 돌아오면 반영)
@@ -161,48 +143,10 @@ export const HistoryScreen = () => {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        {/* 모드 토글 */}
-        <View style={styles.modeTabRow}>
-          <TouchableOpacity
-            style={[styles.modeTab, viewMode === 'history' && styles.modeTabActive]}
-            onPress={() => setViewMode('history')}
-          >
-            <Text style={[styles.modeTabText, viewMode === 'history' && styles.modeTabTextActive]}>
-              📋 기록
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.modeTab, viewMode === 'stats' && styles.modeTabActive]}
-            onPress={() => setViewMode('stats')}
-          >
-            <Text style={[styles.modeTabText, viewMode === 'stats' && styles.modeTabTextActive]}>
-              📊 통계
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 통계 모드일 때만 기간 탭 표시 */}
-        {viewMode === 'stats' && (
-          <View style={styles.periodTabRow}>
-            {(['week', 'month', 'year'] as StatsPeriod[]).map((p) => (
-              <TouchableOpacity
-                key={p}
-                style={[styles.periodTab, period === p && styles.periodTabActive]}
-                onPress={() => setPeriod(p)}
-              >
-                <Text style={[styles.periodTabText, period === p && styles.periodTabTextActive]}>
-                  {p === 'week' ? '주' : p === 'month' ? '월' : '년'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         <Text style={styles.headerTitle}>내 기록</Text>
         <Text style={styles.headerSub}>{sessions.length}일의 운동 기록</Text>
       </View>
 
-      {viewMode === 'history' ? (
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
@@ -232,11 +176,7 @@ export const HistoryScreen = () => {
 
         <View style={{ height: 24 }} />
       </ScrollView>
-) : (
-  // 통계 모드 (F-3에서 실제 컴포넌트로 교체)
-<StatsView sessions={sessions} period={period} weeklyGoal={weeklyGoal} />
 
-)}
       {/* 세션 상세 모달 추가 */}
       <SessionDetailModal
         session={selectedSession}
@@ -433,81 +373,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-
-
-  modeTabRow: {
-  flexDirection: 'row',
-  paddingHorizontal: 16,
-  paddingTop: 12,
-  paddingBottom: 8,
-  gap: 8,
-},
-modeTab: {
-  flex: 1,
-  paddingVertical: 10,
-  borderRadius: 10,
-  backgroundColor: '#1E293B',
-  borderWidth: 1,
-  borderColor: '#334155',
-  alignItems: 'center',
-},
-modeTabActive: {
-  backgroundColor: '#3B82F6',
-  borderColor: '#60A5FA',
-},
-modeTabText: {
-  color: '#94A3B8',
-  fontSize: 14,
-  fontWeight: '600',
-},
-modeTabTextActive: {
-  color: '#FFFFFF',
-  fontWeight: '700',
-},
-periodTabRow: {
-  flexDirection: 'row',
-  paddingHorizontal: 16,
-  paddingBottom: 8,
-  gap: 6,
-},
-periodTab: {
-  flex: 1,
-  paddingVertical: 8,
-  borderRadius: 8,
-  backgroundColor: '#0F172A',
-  borderWidth: 1,
-  borderColor: '#334155',
-  alignItems: 'center',
-},
-periodTabActive: {
-  backgroundColor: '#1E293B',
-  borderColor: '#60A5FA',
-},
-periodTabText: {
-  color: '#94A3B8',
-  fontSize: 13,
-  fontWeight: '500',
-},
-periodTabTextActive: {
-  color: '#F8FAFC',
-  fontWeight: '700',
-},
-statsPlaceholder: {
-  flex: 1,
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 40,
-},
-placeholderText: {
-  color: '#F8FAFC',
-  fontSize: 18,
-  fontWeight: '600',
-  marginBottom: 8,
-},
-placeholderHint: {
-  color: '#94A3B8',
-  fontSize: 13,
-},
 
   // 빈 상태
   emptyEmoji: {

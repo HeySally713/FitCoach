@@ -1,0 +1,338 @@
+// src/components/StatsView.tsx
+// 통계 뷰 - 주간 요약 + 카테고리별 + 주간 추이 + 누적
+
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { WorkoutSession } from '../types/workout';
+import {
+  StatsPeriod,
+  getWeeklyStats,
+  getCategoryStats,
+  CategoryStats,
+} from '../utils/stats';
+import { BODY_PART_EMOJI } from '../types/workout';
+
+interface StatsViewProps {
+  sessions: WorkoutSession[];
+  period: StatsPeriod;
+  weeklyGoal?: number;
+}
+
+export const StatsView: React.FC<StatsViewProps> = ({
+  sessions,
+  period,
+  weeklyGoal = 3,
+}) => {
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  const weekly = useMemo(
+    () => getWeeklyStats(sessions, weeklyGoal),
+    [sessions, weeklyGoal]
+  );
+  const categories = useMemo(
+    () => getCategoryStats(sessions, period),
+    [sessions, period]
+  );
+
+  const periodLabel =
+    period === 'week' ? '이번 주' : period === 'month' ? '이번 달' : '올해';
+
+  const toggleCategory = (cat: string) => {
+    setExpandedCategory((prev) => (prev === cat ? null : cat));
+  };
+
+  // 카테고리 총합 (퍼센트 계산용)
+  const totalCategoryCount = categories.reduce((sum, c) => sum + c.count, 0);
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* 1. 주간 요약 카드 (항상 이번 주 기준) */}
+      <View style={styles.summaryCard}>
+        <Text style={styles.cardTitle}>📅 이번 주 요약</Text>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryNumber}>{weekly.workoutDays}</Text>
+            <Text style={styles.summaryLabel}>운동 일수</Text>
+            <Text style={styles.summarySub}>목표 {weekly.goalDays}일</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryNumber}>{weekly.totalDurationMin}</Text>
+            <Text style={styles.summaryLabel}>분</Text>
+            <Text style={styles.summarySub}>총 운동 시간</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryNumber}>{weekly.totalCalories}</Text>
+            <Text style={styles.summaryLabel}>kcal</Text>
+            <Text style={styles.summarySub}>유산소</Text>
+          </View>
+        </View>
+
+        {/* 진행률 바 */}
+        <View style={styles.progressBarBg}>
+          <View
+            style={[
+              styles.progressBarFill,
+              { width: `${weekly.achievementRate * 100}%` },
+            ]}
+          />
+        </View>
+        <Text style={styles.progressText}>
+          목표 달성률 {Math.round(weekly.achievementRate * 100)}%
+          {weekly.achievementRate >= 1 && '  🎉'}
+        </Text>
+      </View>
+
+      {/* 2. 카테고리별 운동량 ({periodLabel}) */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>🏷️ 카테고리별 운동량 · {periodLabel}</Text>
+        {totalCategoryCount === 0 ? (
+          <Text style={styles.emptyText}>아직 운동 기록이 없어요</Text>
+        ) : (
+          categories.map((cat) => {
+            const percent =
+              totalCategoryCount > 0 ? cat.count / totalCategoryCount : 0;
+            const isExpanded = expandedCategory === cat.category;
+
+            return (
+              <View key={cat.category}>
+                <TouchableOpacity
+                  style={styles.categoryRow}
+                  onPress={() => cat.count > 0 && toggleCategory(cat.category)}
+                  activeOpacity={cat.count > 0 ? 0.6 : 1}
+                >
+                  {/* 라벨 */}
+                  <View style={styles.categoryLabelRow}>
+                    <Text style={styles.categoryLabel}>
+                      {cat.emoji} {cat.label}
+                    </Text>
+                    <Text style={styles.categoryCount}>
+                      {cat.count}회
+                      {cat.count > 0 && (
+                        <Text style={styles.categoryArrow}>
+                          {' '}
+                          {isExpanded ? '▾' : '▸'}
+                        </Text>
+                      )}
+                    </Text>
+                  </View>
+
+                  {/* 비율 막대 */}
+                  <View style={styles.barBg}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        {
+                          width: `${Math.max(percent * 100, cat.count > 0 ? 4 : 0)}%`,
+                          backgroundColor: getCategoryColor(cat.category),
+                        },
+                      ]}
+                    />
+                  </View>
+
+                  <Text style={styles.categoryMeta}>
+                    {cat.durationMin > 0 && `${cat.durationMin}분`}
+                    {cat.calories > 0 && `  ·  🔥 ${cat.calories}kcal`}
+                    {totalCategoryCount > 0 && `  ·  ${Math.round(percent * 100)}%`}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 부위 드릴다운 (Accordion) */}
+                {isExpanded && cat.bodyPartBreakdown.length > 0 && (
+                  <View style={styles.drilldown}>
+                    <Text style={styles.drilldownTitle}>부위별 비율</Text>
+                    {(() => {
+                      const drillTotal = cat.bodyPartBreakdown.reduce(
+                        (sum, b) => sum + b.count,
+                        0
+                      );
+                      return cat.bodyPartBreakdown.map((bp) => {
+                        const bpPercent =
+                          drillTotal > 0 ? bp.count / drillTotal : 0;
+                        const emoji =
+                          BODY_PART_EMOJI[
+                            bp.bodyPart as keyof typeof BODY_PART_EMOJI
+                          ] ?? '⚪️';
+                        return (
+                          <View key={bp.bodyPart} style={styles.drilldownRow}>
+                            <Text style={styles.drilldownLabel}>
+                              {emoji} {bp.bodyPart}
+                            </Text>
+                            <View style={styles.drilldownBarBg}>
+                              <View
+                                style={[
+                                  styles.drilldownBarFill,
+                                  { width: `${bpPercent * 100}%` },
+                                ]}
+                              />
+                            </View>
+                            <Text style={styles.drilldownCount}>
+                              {bp.count}회 ({Math.round(bpPercent * 100)}%)
+                            </Text>
+                          </View>
+                        );
+                      });
+                    })()}
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
+      </View>
+    </ScrollView>
+  );
+};
+
+// 카테고리별 색상
+const getCategoryColor = (cat: string): string => {
+  switch (cat) {
+    case 'gym':
+      return '#3B82F6';
+    case 'home':
+      return '#10B981';
+    case 'cardio':
+      return '#F59E0B';
+    case 'yoga':
+      return '#A78BFA';
+    default:
+      return '#64748B';
+  }
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0F172A' },
+  content: { padding: 16, paddingBottom: 40 },
+
+  // 공통 카드
+  card: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  cardTitle: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+  emptyText: {
+    color: '#64748B',
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+
+  // 주간 요약 카드
+  summaryCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryNumber: { color: '#3B82F6', fontSize: 28, fontWeight: '800' },
+  summaryLabel: { color: '#F8FAFC', fontSize: 13, fontWeight: '600' },
+  summarySub: { color: '#64748B', fontSize: 11, marginTop: 2 },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 4,
+  },
+  progressText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+
+  // 카테고리 카드
+  categoryRow: {
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#0F172A',
+  },
+  categoryLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  categoryLabel: { color: '#F8FAFC', fontSize: 14, fontWeight: '600' },
+  categoryCount: { color: '#94A3B8', fontSize: 13 },
+  categoryArrow: { color: '#3B82F6', fontSize: 13 },
+  barBg: {
+    height: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  barFill: { height: '100%', borderRadius: 4 },
+  categoryMeta: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  // 드릴다운 (Accordion)
+  drilldown: {
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  drilldownTitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  drilldownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  drilldownLabel: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    width: 70,
+  },
+  drilldownBarBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#1E293B',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  drilldownBarFill: {
+    height: '100%',
+    backgroundColor: '#3B82F6',
+    borderRadius: 3,
+  },
+  drilldownCount: {
+    color: '#94A3B8',
+    fontSize: 11,
+    width: 70,
+    textAlign: 'right',
+  },
+});

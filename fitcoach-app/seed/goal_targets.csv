@@ -1,0 +1,7 @@
+goal,sets_min,sets_max,reps_min,reps_max,rest_sec,rir,cardio_min_per_week,strength_days_per_week,intensity_pct_1rm
+weight_loss,2,4,10,15,45,2,150,2,55
+muscle_gain,3,5,6,12,90,1,75,4,75
+health,2,3,8,12,60,3,150,2,60
+endurance,2,4,15,30,30,3,180,2,50
+flexibility,1,3,0,0,30,3,60,1,0
+maintenance,2,3,8,12,75,2,90,3,65

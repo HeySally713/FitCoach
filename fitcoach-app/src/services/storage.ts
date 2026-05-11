@@ -133,6 +133,32 @@ export async function deleteSession(date: string): Promise<void> {
   await writeAllSessions(sessions);
   console.log(`[Storage] 세션 삭제 완료: ${date}`);
 }
+
+/**
+ * 특정 날짜의 특정 운동을 새 데이터로 교체
+ */
+export async function updateExerciseInSession(
+  date: string,
+  exerciseId: string,
+  newExercise: Omit<WorkoutExercise, 'completedAt'>
+): Promise<void> {
+  const sessions = await readAllSessions();
+  if (!sessions[date]) return;
+
+  const idx = sessions[date].exercises.findIndex(
+    (ex) => ex.exerciseId === exerciseId
+  );
+  if (idx < 0) return;
+
+  sessions[date].exercises[idx] = {
+    ...newExercise,
+    completedAt: sessions[date].exercises[idx].completedAt, // preserve original timestamp
+  };
+
+  await writeAllSessions(sessions);
+  console.log(`[Storage] 수정 완료: ${date} ${exerciseId}`);
+}
+
 /**
  * 오늘 날짜에 해당 운동이 이미 기록되어 있으면 반환
  */

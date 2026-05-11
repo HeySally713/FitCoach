@@ -1,19 +1,20 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Swipeable } from 'react-native-gesture-handler';
 import { ExerciseFilterBar } from './src/components/ExerciseFilterBar';
 import { EXERCISES_BY_CATEGORY, EXERCISES_BY_CATEGORY_SEARCHABLE, ExerciseSearchable, ALL_EXERCISES } from './src/utils/exerciseAdapter';
 import { Exercise, CARDIO_DURATIONS, CardioDuration, ExerciseLevel } from './src/types/exercise';
 import React, { useState, useEffect, useMemo } from 'react';
-import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
+import { NavigationContainer, useFocusEffect, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { 
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Image, ActivityIndicator,
-  Platform, Alert  // 합침
+  Platform, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { useExerciseVideos } from './src/hooks/useExerciseVideos';
 import { ExerciseVideo, SearchVideosParams } from './src/services/youtube';
-
 import { 
   saveExercise, 
   getTodayExercise, 
@@ -38,12 +39,13 @@ import { getProfile } from './src/services/profile';
 import { calculateStreak } from './src/utils/streak';
 import { getAllSessions } from './src/services/storage';
 import { RecommendationScreen } from './src/screens/RecommendationScreen';
-
-
-
-
+import { editBus } from './src/utils/editBus';
+import { findExerciseById } from './src/utils/exerciseAdapter';
+import { updateExerciseInSession } from './src/services/storage';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 const Tab = createBottomTabNavigator();
+export const navigationRef = createNavigationContainerRef();
 
 interface SetState {
   id: number;
@@ -80,6 +82,32 @@ const [cardioDuration, setCardioDuration] = useState<CardioDuration | null>(null
 const [selectedBodyPart, setSelectedBodyPart] = useState<BodyPart | null>(null);
 const [cardioFields, setCardioFields] = useState<CardioFields>({});
 const [streak, setStreak] = useState<number>(0);
+const [editingContext, setEditingContext] = useState<{ date: string; originalExerciseId: string } | null>(null);
+
+useEffect(() => {
+  const unsub = editBus.on(({ date, exercise }) => {
+    // Build an Exercise-shaped object from the saved exercise
+    const dbExercise = findExerciseById(exercise.exerciseId);
+    if (!dbExercise) {
+      Alert.alert('알림', '이 운동은 더 이상 DB에 없어 편집할 수 없어요.');
+      return;
+    }
+    // Pre-fill sets from saved data
+    setSets(
+      exercise.sets.map((s, idx) => ({
+        id: idx + 1,
+        weight: s.weight != null ? String(s.weight) : '',
+        reps: s.reps != null ? String(s.reps) : '',
+        done: true,
+      }))
+    );
+    setSelectedBodyPart((exercise.bodyPart as any) ?? null);
+    setSelectedIntensity(exercise.intensity ?? null);
+    setEditingContext({ date, originalExerciseId: exercise.exerciseId });
+    setSelectedExercise(dbExercise);
+  });
+  return () => { unsub(); };
+}, []);
 
 
 // 스트릭 로드 (운동 탭 진입 시)
@@ -221,6 +249,31 @@ const updateSet = (id: number, field: 'weight' | 'reps', value: string) => {
   );
 };
 
+const deleteSet = (id: number) => {
+  setSets((prev) => {
+    if (prev.length <= 1) {
+      Alert.alert('알림', '최소 1세트는 유지되어야 합니다.');
+      return prev;
+    }
+    // Filter out and renumber so set.id stays sequential
+    const filtered = prev.filter((s) => s.id !== id);
+    return filtered.map((s, idx) => ({ ...s, id: idx + 1 }));
+  });
+};
+
+const copyFromPreviousSet = (id: number) => {
+  setSets((prev) => {
+    const idx = prev.findIndex((s) => s.id === id);
+    if (idx <= 0) return prev; // can't copy for first set
+    const prevSet = prev[idx - 1];
+    return prev.map((s) =>
+      s.id === id
+        ? { ...s, weight: prevSet.weight, reps: prevSet.reps }
+        : s
+    );
+  });
+};
+
 const addSet = () => {
   setSets((prev) => [
     ...prev,
@@ -238,7 +291,8 @@ const closeModal = () => {
   setSelectedBodyPart(null); 
   setCardioFields({});  
   setSelectedIntensity(null);  // ← 추가
-
+  setSelectedExercise(null);
+  setEditingContext(null);
   setSets([{ id: 1, weight: '', reps: '', done: false }]);
 };
 
@@ -265,13 +319,13 @@ const handleCompleteWorkout = async () => {
     const pace = distance > 0 ? calculatePace(distance, duration) : undefined;
 
     try {
-      await upsertTodayExercise({
+      const cardioPayload = {
         exerciseId: selectedExercise.id,
         exerciseName: selectedExercise.name,
         category: selectedExercise.category,
         equipmentType: selectedExercise.equipmentType,
         bodyPart: selectedBodyPart || '유산소',
-        intensity: selectedIntensity || undefined,  // ← 추가
+        intensity: selectedIntensity || undefined,
 
         sets: [{
           setNumber: 1,
@@ -287,7 +341,18 @@ const handleCompleteWorkout = async () => {
           calories,
           completed: true,
         }],
-      });
+      };
+
+      if (editingContext) {
+        await updateExerciseInSession(
+          editingContext.date,
+          editingContext.originalExerciseId,
+          cardioPayload
+        );
+      } else {
+        await upsertTodayExercise(cardioPayload);
+      }
+
 
       Alert.alert(
         '✅ 기록 저장 완료',
@@ -316,21 +381,32 @@ const handleCompleteWorkout = async () => {
   }
 
   try {
-    await upsertTodayExercise({
-      exerciseId: selectedExercise.id,
-      exerciseName: selectedExercise.name,
-      category: selectedExercise.category,
-      equipmentType: selectedExercise.equipmentType,
-      bodyPart: selectedBodyPart || undefined,
-      intensity: selectedIntensity || undefined,  // ← 추가
+  const weightPayload = {
+    exerciseId: selectedExercise.id,
+    exerciseName: selectedExercise.name,
+    category: selectedExercise.category,
+    equipmentType: selectedExercise.equipmentType,
+    bodyPart: selectedBodyPart || undefined,
+    intensity: selectedIntensity || undefined,
 
-      sets: completedSets.map((s, idx) => ({
-        setNumber: idx + 1, // 자동 이어붙이기 (1, 2, 3, ...)
-        weight: parseFloat(s.weight) || 0,
-        reps: parseInt(s.reps, 10) || 0,
-        completed: true,
-      })),
-    });
+    sets: completedSets.map((s, idx) => ({
+      setNumber: idx + 1, // 자동 이어붙이기 (1, 2, 3, ...)
+      weight: parseFloat(s.weight) || 0,
+      reps: parseInt(s.reps, 10) || 0,
+      completed: true,
+    })),
+  };
+
+  if (editingContext) {
+    await updateExerciseInSession(
+      editingContext.date,
+      editingContext.originalExerciseId,
+      weightPayload
+    );
+  } else {
+    await upsertTodayExercise(weightPayload);
+  }
+
 
     // 새로 추가된 세트 수 계산 (메시지용)
     const previouslySaved = completedSets.filter(
@@ -417,7 +493,14 @@ const handleCompleteWorkout = async () => {
 
       {/* 운동 리스트 */}
       <ScrollView style={styles.exerciseList}>
-        {currentExercises.map((exercise: Exercise) => (
+                  {currentExercises.length === 0 ? (
+            <View style={styles.emptyListBox}>
+              <Text style={styles.emptyListEmoji}>🔍</Text>
+              <Text style={styles.emptyListTitle}>검색 결과가 없어요</Text>
+              <Text style={styles.emptyListSub}>다른 키워드나 필터를 시도해보세요</Text>
+            </View>
+          ) : (
+          currentExercises.map((exercise: Exercise) => (
           <TouchableOpacity 
             key={exercise.id} 
             style={styles.exerciseCard}
@@ -432,7 +515,7 @@ const handleCompleteWorkout = async () => {
             </View>
             <Text style={styles.videoIcon}>🎥</Text>
           </TouchableOpacity>
-        ))}
+        )))}
       </ScrollView>
 
       {/* 🚀 핵심 기능: YouTube + 운동 기록 통합 모달 */}
@@ -443,13 +526,24 @@ const handleCompleteWorkout = async () => {
         onRequestClose={closeModal}
       >
         <SafeAreaView style={styles.modalScreen}>
+          
+    
           {/* 모달 헤더 */}
           <View style={styles.modalHeader}>
             <View>
+              {editingContext && (
+  <View style={styles.editBanner}>
+    <Text style={styles.editBannerText}>
+      ✏️ {editingContext.date} 기록 편집 중
+    </Text>
+  </View>
+)}
+
               <Text style={styles.modalTitle}>{selectedExercise?.name}</Text>
               <Text style={styles.modalSubtitle}>
                 {selectedExercise?.target} • {selectedExercise?.level}
               </Text>
+              
               {/* 운동 부위 선택 영역 */}
 <View style={styles.bodyPartSection}>
   <Text style={styles.bodyPartLabel}>운동 부위</Text>
@@ -527,7 +621,11 @@ const handleCompleteWorkout = async () => {
             </TouchableOpacity>
           </View>
 
-<ScrollView style={styles.modalContent}>
+<ScrollView 
+  style={styles.modalContent}
+  contentContainerStyle={{ paddingBottom: 300 }}
+  keyboardShouldPersistTaps="handled"
+>
 {/* Step C: 카디오 시간 선택 (cardio + duration 미선택 시) */}
 {selectedExercise?.equipmentType === 'cardio' && !cardioDuration && (
   <View style={styles.videoContainer}>
@@ -672,9 +770,21 @@ const handleCompleteWorkout = async () => {
                 <Text style={[styles.tableHeaderText, { flex: 1 }]}>완료</Text>
               </View>
 
-              {/* 세트 입력 행들 */}
-              {sets.map((set, index) => (
-                <View key={set.id} style={[
+            {/* 세트 입력 행들 */}
+            {sets.map((set, index) => (
+              <Swipeable
+                key={set.id}
+                renderRightActions={() => (
+                  <TouchableOpacity
+                    style={styles.swipeDeleteAction}
+                    onPress={() => deleteSet(set.id)}
+                  >
+                    <Text style={styles.swipeDeleteText}>🗑 삭제</Text>
+                  </TouchableOpacity>
+                )}
+                overshootRight={false}
+              >
+                <View style={[
                   styles.tableRow, 
                   set.done && styles.tableRowDone
                 ]}>
@@ -697,6 +807,15 @@ const handleCompleteWorkout = async () => {
                     onChangeText={(value) => updateSet(set.id, 'reps', value)}
                     editable={true}
                   />
+                  {index > 0 && (
+                    <TouchableOpacity
+                      style={styles.copyBtn}
+                      onPress={() => copyFromPreviousSet(set.id)}
+                    >
+                      <Text style={styles.copyBtnText}>↑</Text>
+                    </TouchableOpacity>
+                  )}
+
                   <TouchableOpacity 
                     style={[styles.checkBtn, set.done && styles.checkBtnDone]}
                     onPress={() => toggleSetDone(set.id)}
@@ -704,7 +823,9 @@ const handleCompleteWorkout = async () => {
                     <Text style={styles.checkBtnText}>{set.done ? '✓' : ''}</Text>
                   </TouchableOpacity>
                 </View>
-              ))}
+              </Swipeable>
+            ))}
+
 
               {/* 세트 추가 버튼 */}
               <TouchableOpacity style={styles.addSetBtn} onPress={addSet}>
@@ -780,8 +901,10 @@ const CommunityScreen = () => (
 export default function App() {
   return (
     <>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light" />
-      <NavigationContainer>
+       <ErrorBoundary>
+      <NavigationContainer ref={navigationRef}>
         <Tab.Navigator
           screenOptions={{
             headerShown: false,
@@ -811,6 +934,8 @@ export default function App() {
 
         </Tab.Navigator>
       </NavigationContainer>
+      </ErrorBoundary>
+       </GestureHandlerRootView>
     </>
   );
 }
@@ -889,6 +1014,36 @@ videoHelpText: {
   fontSize: 12,
   marginTop: 4,
   marginBottom: 8,
+},
+swipeDeleteAction: {
+  backgroundColor: '#DC2626',
+  justifyContent: 'center',
+  alignItems: 'center',
+  width: 80,
+  marginVertical: 2,
+  borderRadius: 8,
+},
+swipeDeleteText: {
+  color: '#FFFFFF',
+  fontWeight: '700',
+  fontSize: 13,
+},
+
+copyBtn: {
+  width: 32,
+  height: 32,
+  borderRadius: 8,
+  backgroundColor: '#1E293B',
+  borderWidth: 1,
+  borderColor: '#475569',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginHorizontal: 4,
+},
+copyBtnText: {
+  color: '#3B82F6',
+  fontSize: 16,
+  fontWeight: '700',
 },
 
   
@@ -970,6 +1125,54 @@ videoHelpText: {
     borderWidth: 1,
     borderColor: '#334155',
   },
+  deleteSetBtn: {
+  width: 32,
+  height: 32,
+  borderRadius: 8,
+  backgroundColor: '#1E293B',
+  borderWidth: 1,
+  borderColor: '#475569',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginHorizontal: 4,
+},
+deleteSetBtnText: {
+  color: '#94A3B8',
+  fontSize: 14,
+  fontWeight: '600',
+},
+
+editBanner: {
+  backgroundColor: '#F59E0B',
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+  alignItems: 'center',
+},
+editBannerText: {
+  color: '#0F172A',
+  fontWeight: '700',
+  fontSize: 13,
+},
+
+emptyListBox: {
+  paddingVertical: 60,
+  alignItems: 'center',
+},
+emptyListEmoji: {
+  fontSize: 48,
+  marginBottom: 12,
+},
+emptyListTitle: {
+  color: '#F8FAFC',
+  fontSize: 16,
+  fontWeight: '700',
+  marginBottom: 6,
+},
+emptyListSub: {
+  color: '#94A3B8',
+  fontSize: 13,
+},
+
   inputDone: { backgroundColor: '#065F46', borderColor: '#10B981' },
   checkBtn: { 
     flex: 1, 

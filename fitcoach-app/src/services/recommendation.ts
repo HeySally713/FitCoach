@@ -267,9 +267,9 @@ export const generateWeeklyPlan = (
   // Cardio dose per session for goals needing cardio
   const cardioPerSession = Math.ceil((target.cardio_min_per_week ?? 0) / Math.max(frequency, 1));
 
-  const KOR_DAYS = ['월','화','수','목','금','토','일'];
-  const labelFor = (i: number) => KOR_DAYS[i] ?? `Day ${i+1}`;
+  const labelFor = (i: number) => `${i + 1}일차`;
 
+  
   if (splitType === 'flexibility_focus') {
     for (let i = 0; i < frequency; i++) {
       days.push(buildDay(

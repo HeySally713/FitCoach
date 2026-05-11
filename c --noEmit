@@ -1,0 +1,5 @@
+[33mbac48ad[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Step C: dynamic YouTube video selection with 30-day cache + cardio duration picker
+[33m3216ca3[m Step C-1: youtube service + hook + types
+[33m3e176a7[m Step B: YouTube API integration working - search service + test verified
+[33m226cb46[m Step A: bottom tab navigation + workout list UI
+[33mc250307[m ✨ FitCoach 기본 UI 완성 - 탭 네비게이션 + Planfit 스타일 운동 리스트

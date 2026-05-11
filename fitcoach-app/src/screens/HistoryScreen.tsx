@@ -25,6 +25,10 @@ import { groupSessionsByPeriod, formatRelativeDate } from '../utils/dateGroup';
 import { StatsPeriod } from '../utils/stats';
 import { StatsView } from '../components/StatsView';
 import { getProfile } from '../services/profile';
+import { editBus } from '../utils/editBus';
+import { navigationRef } from '../../App';  // adjust path if needed
+
+
 
 
 /**
@@ -91,13 +95,16 @@ export const HistoryScreen = () => {
     }, [refresh])
   );
 
-  const handleEditExercise = (exercise:  WorkoutExercise) => {
-  Alert.alert(
-    '편집 기능',
-    `${exercise.exerciseName} 편집은 다음 업데이트에 추가됩니다.\n현재는 운동 탭에서 같은 운동 다시 기록하면 누적됩니다.`,
-    [{ text: '확인' }]
-  );
+ const handleEditExercise = (exercise: WorkoutExercise) => {
+  if (!selectedSession) return;
+  editBus.emit({ date: selectedSession.date, exercise });
+  setSelectedSession(null);
+  // Switch to 운동 tab
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('Workout' as never);
+  }
 };
+
 
 
 
@@ -202,7 +209,18 @@ export const HistoryScreen = () => {
         <Text style={styles.headerSub}>{sessions.length}일의 운동 기록</Text>
       </View>
 
-      {viewMode === 'history' ? (
+      
+      {viewMode === 'history' && sessions.length === 0 && !loading ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyEmoji}>🏋️</Text>
+          <Text style={styles.emptyTitle}>아직 운동 기록이 없어요</Text>
+          <Text style={styles.emptySub}>
+            운동 탭에서 첫 운동을 기록해보세요!{'\n'}
+            AI 추천을 받아 시작할 수도 있어요.
+          </Text>
+        </View>
+      ) : null}
+
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
@@ -236,7 +254,7 @@ export const HistoryScreen = () => {
   // 통계 모드 (F-3에서 실제 컴포넌트로 교체)
 <StatsView sessions={sessions} period={period} weeklyGoal={weeklyGoal} />
 
-)}
+)
       {/* 세션 상세 모달 추가 */}
       <SessionDetailModal
         session={selectedSession}
@@ -366,6 +384,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 
+  
   // 그룹
   group: {
     marginBottom: 8,
@@ -510,21 +529,30 @@ placeholderHint: {
 },
 
   // 빈 상태
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    color: '#F8FAFC',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  emptySub: {
-    color: '#64748B',
-    fontSize: 14,
-    textAlign: 'center',
-  },
+  emptyState: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: 40,
+  paddingTop: 80,
+},
+emptyEmoji: {
+  fontSize: 64,
+  marginBottom: 16,
+},
+emptyTitle: {
+  color: '#F8FAFC',
+  fontSize: 18,
+  fontWeight: '700',
+  marginBottom: 12,
+  textAlign: 'center',
+},
+emptySub: {
+  color: '#94A3B8',
+  fontSize: 14,
+  lineHeight: 22,
+  textAlign: 'center',
+},
 
   // 에러 상태
   errorText: {

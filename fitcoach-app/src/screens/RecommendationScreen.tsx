@@ -152,7 +152,7 @@ useEffect(() => {
         {plan.days.map((day, i) => (
           <View key={i} style={styles.dayCard}>
             <View style={styles.dayHeader}>
-              <Text style={styles.dayLabel}>{day.dayLabel}요일</Text>
+              <Text style={styles.dayLabel}>이번주 {day.dayLabel}</Text>
               <Text style={styles.dayFocus}>{day.focus}</Text>
             </View>
             <Text style={styles.dayMeta}>

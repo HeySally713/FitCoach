@@ -15,7 +15,7 @@ export type MovementPattern =
   | 'cardio_steady' | 'cardio_hiit'
   | 'flexibility' | 'balance' | 'recovery';
 
-export type ExerciseCategory = 'gym' | 'home' | 'cardio' | 'yoga';
+export type ExerciseCategory = 'gym' | 'home' | 'yoga' | 'cardio' | 'warmup' | 'cooldown';
 export type EquipmentDB = 'machine'|'barbell'|'dumbbell'|'cable'|'smith'|'plate'|'kettlebell'|'bodyweight'|'band'|'cardio'|'yoga';
 
 export interface DBExercise {

@@ -208,6 +208,9 @@ useEffect(() => {
     { key: 'home', label: '🏠 홈트' },
     { key: 'yoga', label: '🧘 요가' },
     { key: 'cardio', label: '🏃 유산소' },
+    { key: 'warmup', label: '🔥 워밍업' },
+    { key: 'cooldown', label: '🧘 쿨다운' },
+
   ];
 const exercises: Record<string, Exercise[]> = EXERCISES_BY_CATEGORY;
 

@@ -1,7 +1,7 @@
 // src/types/exercise.ts
 // 운동 데이터 관련 타입 정의
 
-export type ExerciseCategory = 'gym' | 'home' | 'yoga' | 'cardio';
+export type ExerciseCategory = 'gym' | 'home' | 'yoga' | 'cardio'| 'warmup' | 'cooldown';
 
 export type EquipmentType = 'machine' | 'freeweight' | 'bodyweight' | 'yoga' | 'cardio';
 

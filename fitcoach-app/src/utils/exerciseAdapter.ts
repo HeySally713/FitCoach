@@ -18,15 +18,20 @@ const equipmentMap: Record<string, EquipmentType> = {
   yoga: 'yoga',
 };
 
-export const dbToExercise = (db: DBExercise): Exercise => ({
-  id: db.exercise_id,
-  name: db.name_ko,
-  category: db.category,
-  equipmentType: equipmentMap[db.equipment] ?? 'bodyweight',
-  target: (db.primary_muscles ?? []).join(', ') || '전신',
-  level: db.difficulty,
-  videoId: db.video_id ?? '', // empty string when DB has no video
-});
+export const dbToExercise = (db: DBExercise): Exercise => {
+  const isWarmupOrCooldown = db.category === 'warmup' || db.category === 'cooldown';
+  return {
+    id: db.exercise_id,
+    name: db.name_ko,
+    category: db.category as any,
+    equipmentType: isWarmupOrCooldown
+      ? 'cardio'
+      : (equipmentMap[db.equipment] ?? 'bodyweight'),
+    target: (db.primary_muscles ?? []).join(', ') || '전신',
+    level: db.difficulty as any,
+    videoId: db.video_id ?? '',
+  };
+};
 
 export const ALL_EXERCISES: Exercise[] = EXERCISES.map(dbToExercise);
 
@@ -39,6 +44,8 @@ export const EXERCISES_BY_CATEGORY: Record<string, Exercise[]> = {
   home: ALL_EXERCISES.filter(e => e.category === 'home'),
   yoga: ALL_EXERCISES.filter(e => e.category === 'yoga'),
   cardio: ALL_EXERCISES.filter(e => e.category === 'cardio'),
+  warmup: ALL_EXERCISES.filter(e => e.category === 'warmup'),    // ← new
+  cooldown: ALL_EXERCISES.filter(e => e.category === 'cooldown'), // ← new
 };
 // src/utils/exerciseAdapter.ts (add to bottom)
 
@@ -63,19 +70,21 @@ export const EXERCISES_BY_CATEGORY_SEARCHABLE: Record<string, ExerciseSearchable
   home:   ALL_EXERCISES_SEARCHABLE.filter(e => e.category === 'home'),
   yoga:   ALL_EXERCISES_SEARCHABLE.filter(e => e.category === 'yoga'),
   cardio: ALL_EXERCISES_SEARCHABLE.filter(e => e.category === 'cardio'),
+  warmup: ALL_EXERCISES_SEARCHABLE.filter(e => e.category === 'warmup'),    // ← new
+  cooldown: ALL_EXERCISES_SEARCHABLE.filter(e => e.category === 'cooldown'),
 };
 
 // Available equipment per category (for chip display)
 export const EQUIPMENT_LABELS: Record<string, string> = {
-  machine: '🤖 머신',
-  smith: '🤖 스미스',
-  cable: '🔗 케이블',
-  plate: '🏋️ 플레이트',
-  barbell: '🏋️ 바벨',
-  dumbbell: '💪 덤벨',
-  kettlebell: '🔔 케틀벨',
-  bodyweight: '🙌 맨몸',
-  band: '🎀 밴드',
-  cardio: '🏃 유산소',
-  yoga: '🧘 요가',
+  machine: '머신',
+  smith: '스미스',
+  cable: '케이블',
+  plate: '플레이트',
+  barbell: '바벨',
+  dumbbell: '덤벨',
+  kettlebell: '케틀벨',
+  bodyweight: '맨몸',
+  band: '밴드',
+  cardio: '유산소',
+  yoga: '요가',
 };

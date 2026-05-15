@@ -230,14 +230,57 @@ const buildDay = (
   label: string, focus: string, patterns: MovementPattern[], count: number,
   pool: DBExercise[], target: GoalTarget, goal: FitnessGoal,
   preferredParts: string[], excludeIds: Set<string>, userWeightKg: number,
-  rng: () => number,         // ← NEW
+  rng: () => number,
   prescribe: (ex: DBExercise) => RoutineExercise = (ex) => prescribeStrength(ex, target),
 ): DailyWorkout => {
   const picks = pickForPatterns(pool, patterns, count, goal, preferredParts, excludeIds, rng);
   picks.forEach(p => excludeIds.add(p.exercise_id));
-  const exercises = picks.map(prescribe);
+  const mainExercises = picks.map(prescribe);
+
+  // === Warm-up: 1 routine at the start ===
+  const warmupPool = EXERCISES.filter(e => e.category === 'warmup');
+  const warmup = warmupPool.length > 0
+    ? warmupPool[Math.floor(rng() * warmupPool.length)]
+    : null;
+  const warmupEx: RoutineExercise | null = warmup ? {
+    exerciseId: warmup.exercise_id,
+    nameKo: warmup.name_ko,
+    category: warmup.category,
+    movementPattern: warmup.movement_pattern,  // ← add
+    videoId: warmup.video_id ?? '',            // ← add
+    sets: 1,
+    reps: '5분',
+    restSec: 0,
+    notes: '운동 시작 전 워밍업',
+  } : null;
+
+  // === Cool-down: 1 routine at the end ===
+  const cooldownPool = EXERCISES.filter(e => e.category === 'cooldown');
+  const cooldown = cooldownPool.length > 0
+    ? cooldownPool[Math.floor(rng() * cooldownPool.length)]
+    : null;
+  const cooldownEx: RoutineExercise | null = cooldown ? {
+    exerciseId: cooldown.exercise_id,
+    nameKo: cooldown.name_ko,
+    category: cooldown.category,
+    movementPattern: cooldown.movement_pattern,  // ← add
+    videoId: cooldown.video_id ?? '',            // ← add
+    sets: 1,
+    reps: '5분',
+    restSec: 0,
+    notes: '운동 마무리 쿨다운',
+  } : null;
+
+  // Final ordered list
+  const exercises = [
+    ...(warmupEx ? [warmupEx] : []),
+    ...mainExercises,
+    ...(cooldownEx ? [cooldownEx] : []),
+  ];
+
   const { min, kcal } = estimateDay(exercises, userWeightKg);
-  return { dayLabel: label, focus, exercises, estimatedDurationMin: min, estimatedCalories: kcal };
+  // Add 10 minutes for warmup + cooldown (5 each)
+  return { dayLabel: label, focus, exercises, estimatedDurationMin: min + 10, estimatedCalories: kcal };
 };
 
 

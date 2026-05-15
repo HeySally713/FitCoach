@@ -176,8 +176,10 @@ useEffect(() => {
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Text style={styles.exCategory}>
                         {ex.category === 'gym' ? '🏋️' :
-                         ex.category === 'home' ? '🏠' :
-                         ex.category === 'cardio' ? '🏃' : '🧘'}
+                          ex.category === 'home' ? '🏠' :
+                          ex.category === 'cardio' ? '🏃' :
+                          ex.category === 'warmup' ? '🔥' :
+                          ex.category === 'cooldown' ? '🌿' : '🧘'}
                       </Text>
                       {onSelectExercise && (
                         <Text style={{ color: '#3B82F6', fontSize: 14, marginLeft: 6, fontWeight: '700' }}>›</Text>

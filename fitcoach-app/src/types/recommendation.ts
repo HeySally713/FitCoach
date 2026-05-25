@@ -54,16 +54,19 @@ export interface GoalTarget {
   intensity_pct_1rm: number;
 }
 
+export type ExercisePhase = 'warmup' | 'main' | 'cardio' | 'cooldown';
+
 export interface RoutineExercise {
   exerciseId: string;
   nameKo: string;
   category: ExerciseCategory;
   movementPattern: MovementPattern;
   sets: number;
-  reps: string;     // "8-12" or "30sec" or "15min"
+  reps: string;
   restSec: number;
   notes?: string;
-  videoId: string | null;
+  videoId: string;
+  phase?: ExercisePhase;  // ← add this line
 }
 
 export type SplitType = 'full_body' | 'upper_lower' | 'push_pull_legs' | 'cardio_focus' | 'flexibility_focus';

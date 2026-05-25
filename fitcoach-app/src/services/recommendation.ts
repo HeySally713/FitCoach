@@ -178,7 +178,7 @@ const prescribeStrength = (ex: DBExercise, target: GoalTarget): RoutineExercise 
   sets: Math.round((target.sets_min + target.sets_max) / 2),
   reps: `${target.reps_min}-${target.reps_max}`,
   restSec: target.rest_sec,
-  videoId: ex.video_id,
+  videoId: ex.video_id ?? '',
 });
 
 const prescribeCardio = (ex: DBExercise, durationMin: number): RoutineExercise => ({
@@ -189,7 +189,7 @@ const prescribeCardio = (ex: DBExercise, durationMin: number): RoutineExercise =
   sets: 1,
   reps: `${durationMin}min`,
   restSec: 0,
-  videoId: ex.video_id,
+  videoId: ex.video_id ?? '',
   notes: ex.movement_pattern === 'cardio_hiit' ? 'HIIT - 강도 위주' : '중강도 유지',
 });
 
@@ -201,7 +201,7 @@ const prescribeFlexibility = (ex: DBExercise): RoutineExercise => ({
   sets: 2,
   reps: '30sec',
   restSec: 15,
-  videoId: ex.video_id,
+  videoId: ex.video_id ?? '',
 });
 
 // ─────────────────────────────────────────
@@ -252,6 +252,7 @@ const buildDay = (
     reps: '5분',
     restSec: 0,
     notes: '운동 시작 전 워밍업',
+    phase: 'warmup',
   } : null;
 
   // === Cool-down: 1 routine at the end ===
@@ -269,6 +270,7 @@ const buildDay = (
     reps: '5분',
     restSec: 0,
     notes: '운동 마무리 쿨다운',
+    phase: 'cooldown',
   } : null;
 
   // Final ordered list

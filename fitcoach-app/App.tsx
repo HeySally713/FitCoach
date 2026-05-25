@@ -38,11 +38,11 @@ import { MyPageScreen } from './src/screens/MyPageScreen';
 import { getProfile } from './src/services/profile';
 import { calculateStreak } from './src/utils/streak';
 import { getAllSessions } from './src/services/storage';
-import { RecommendationScreen } from './src/screens/RecommendationScreen';
 import { editBus } from './src/utils/editBus';
 import { findExerciseById } from './src/utils/exerciseAdapter';
 import { updateExerciseInSession } from './src/services/storage';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { RoutineScreen } from './src/screens/RoutineScreen';
 
 const Tab = createBottomTabNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -74,7 +74,7 @@ const [selectedIntensity, setSelectedIntensity] = useState<WorkoutIntensity | nu
 const [sets, setSets] = useState<SetState[]>([
     { id: 1, weight: '', reps: '', done: false },
   ]);
-const [recommendModalVisible, setRecommendModalVisible] = useState(false);
+
 // Step C: 영상 선택 + 카디오 시간 선택 상태
 const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
 const [cardioDuration, setCardioDuration] = useState<CardioDuration | null>(null);
@@ -431,30 +431,16 @@ const handleCompleteWorkout = async () => {
   }
 };
 
-
-  return (
-    <SafeAreaView style={styles.screen}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>운동</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <TouchableOpacity
-            style={{ backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}
-            onPress={() => {
-              console.log('[DEBUG] AI button tapped, opening modal');
-              setRecommendModalVisible(true);
-            }}
-          >
-            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>🤖 AI 추천</Text>
-          </TouchableOpacity>
-          {streak > 0 && (
-            <View style={{ backgroundColor: '#1E293B', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#F97316' }}>
-              <Text style={{ color: '#F97316', fontSize: 13, fontWeight: '700' }}>🔥 {streak}일</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
+return (
+<SafeAreaView style={styles.screen}>
+<View style={styles.header}>
+  <Text style={styles.headerTitle}>운동검색</Text>
+  {streak > 0 && (
+    <View style={{ backgroundColor: '#1E293B', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#F97316' }}>
+      <Text style={{ color: '#F97316', fontSize: 13, fontWeight: '700' }}>🔥 {streak}일</Text>
+    </View>
+  )}
+</View>
 
 
       {/* 카테고리 버튼 */}
@@ -849,34 +835,6 @@ const handleCompleteWorkout = async () => {
         </SafeAreaView>
       </Modal>
 
-      {/* AI 추천 모달 — 운동 모달과 형제 (sibling) */}
-<Modal
-  visible={recommendModalVisible}
-  animationType="slide"
-  presentationStyle="fullScreen"
-  onRequestClose={() => setRecommendModalVisible(false)}
->
-  <RecommendationScreen
-    onClose={() => setRecommendModalVisible(false)}
-    onSelectExercise={(exerciseId) => {
-      // Find the exercise in the unified DB
-      const exercise = ALL_EXERCISES.find(e => e.id === exerciseId);
-      if (!exercise) {
-        console.warn('[Recommendation] exercise not found:', exerciseId);
-        return;
-      }
-      // Switch to correct category tab so context matches
-      setSelectedCategory(exercise.category);
-      // Close recommendation modal
-      setRecommendModalVisible(false);
-      // Open the existing exercise detail modal
-      // (small delay so the recommendation modal finishes its slide-down)
-      setTimeout(() => {
-        setSelectedExercise(exercise);
-      }, 300);
-    }}
-  />
-</Modal>
 
 
     </SafeAreaView>
@@ -925,9 +883,9 @@ export default function App() {
             },
           }}
         >
-          <Tab.Screen name="Workout" component={WorkoutScreen} options={{ title: '운동' }} />
+          <Tab.Screen name="Routine" component={RoutineScreen} options={{ title: '오늘의 운동' }} />
+          <Tab.Screen name="Workout" component={WorkoutScreen} options={{ title: '운동 검색' }} />
           <Tab.Screen name="History" component={HistoryScreen} options={{ title: '기록' }} />
-          <Tab.Screen name="Videos" component={VideoScreen} options={{ title: '영상가이드' }} />
           <Tab.Screen 
             name="MyPage"
             component={MyPageScreen}

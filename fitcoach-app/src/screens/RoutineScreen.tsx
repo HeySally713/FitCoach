@@ -11,6 +11,11 @@ import { getProfile } from '../services/profile';
 import { useSession } from '../contexts/SessionContext';
 import { navigationRef } from '../utils/navigation';
 import { sessionBus } from '../utils/sessionBus';  // we'll create this in Step 4
+import { SwapModal } from '../components/SwapModal';
+import { Alert } from 'react-native';
+import { getActiveSession, clearActiveSession } from '../services/storage';
+import { useFocusEffect } from '@react-navigation/native';
+
 
 type EnvOverride = 'gym' | 'home' | null;
 
@@ -21,6 +26,8 @@ export const RoutineScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [envOverride, setEnvOverride] = useState<EnvOverride>(null);
   const [dayIndex, setDayIndex] = useState(0); // which day of the routine the user is on
+  const [swapTarget, setSwapTarget] = useState<RoutineExercise | null>(null);
+  const [environment, setEnvironment] = useState<'gym' | 'home'>('gym');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,7 +46,80 @@ export const RoutineScreen: React.FC = () => {
     }
   }, [envOverride, dayIndex]);
 
+  const handleSwapExercise = (newExercise: RoutineExercise) => {
+  if (!today || !swapTarget) return;
+
+  const updatedExercises = today.exercises.map(ex =>
+    ex.exerciseId === swapTarget.exerciseId ? newExercise : ex
+  );
+
+  const updatedDay: DailyWorkout = {
+    ...today,
+    exercises: updatedExercises,
+  };
+
+  setToday(updatedDay);
+  setSwapTarget(null);
+};
+
+
   useEffect(() => { load(); }, [load]);
+
+  useFocusEffect(
+  React.useCallback(() => {
+    const checkResume = async () => {
+      const existing = await getActiveSession();
+      if (!existing) return;
+
+      const exercisesTotal = existing.dayPlan.exercises.length;
+      const currentIdx = existing.currentExerciseIndex;
+      const completedCount = existing.completedExerciseIds.length;
+
+      // Don't prompt if session is already done
+      if (currentIdx >= exercisesTotal) {
+        await clearActiveSession();
+        return;
+      }
+
+      const startedDate = new Date(existing.startedAt).toLocaleString('ko-KR', {
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      Alert.alert(
+        '진행 중인 운동이 있어요',
+        `${startedDate}에 시작\n진행: ${completedCount}/${exercisesTotal}개 완료`,
+        [
+          {
+            text: '새로 시작',
+            style: 'destructive',
+            onPress: async () => {
+              await clearActiveSession();
+            },
+          },
+          {
+            text: '이어서 하기',
+            onPress: () => {
+              const nextEx = existing.dayPlan.exercises[currentIdx];
+              if (nextEx) {
+                if (navigationRef.isReady()) {
+                  navigationRef.navigate('Workout' as never);
+                }
+                setTimeout(() => {
+                  sessionBus.emit({ type: 'openExercise', exerciseId: nextEx.exerciseId });
+                }, 300);
+              }
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    };
+    checkResume();
+  }, [])
+);
 
   if (loading) {
     return (
@@ -129,30 +209,41 @@ export const RoutineScreen: React.FC = () => {
               <Text style={[styles.phaseHeader, { color: cfg.color }]}>
                 {cfg.emoji} {cfg.label}
               </Text>
-              {exercises.map((ex, j) => (
-                <View key={j} style={styles.exRow}>
-                  <View style={styles.exHeader}>
-                    <Text style={styles.exName}>{j + 1}. {ex.nameKo}</Text>
-                    <Text style={styles.exCategory}>
-                      {ex.category === 'gym' ? '🏋️' :
-                       ex.category === 'home' ? '🏠' :
-                       ex.category === 'cardio' ? '🏃' :
-                       ex.category === 'warmup' ? '🔥' :
-                       ex.category === 'cooldown' ? '🌿' : '🧘'}
-                    </Text>
-                  </View>
-                  <Text style={styles.exMeta}>
-                    {ex.sets}세트 × {ex.reps}
-                    {ex.restSec > 0 ? ` · 휴식 ${ex.restSec}초` : ''}
-                  </Text>
-                  {ex.notes && <Text style={styles.exNote}>💡 {ex.notes}</Text>}
-                </View>
-              ))}
+{exercises.map((ex, j) => (
+  <View key={j} style={styles.exRow}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+      <View style={{ flex: 1 }}>
+        <View style={styles.exHeader}>
+          <Text style={styles.exName}>{j + 1}. {ex.nameKo}</Text>
+          <Text style={styles.exCategory}>
+            {ex.category === 'gym' ? '🏋️' :
+             ex.category === 'home' ? '🏠' :
+             ex.category === 'cardio' ? '🏃' :
+             ex.category === 'warmup' ? '🔥' :
+             ex.category === 'cooldown' ? '🌿' : '🧘'}
+          </Text>
+        </View>
+        <Text style={styles.exMeta}>
+          {ex.sets}세트 × {ex.reps}
+          {ex.restSec > 0 ? ` · 휴식 ${ex.restSec}초` : ''}
+        </Text>
+        {ex.notes && <Text style={styles.exNote}>💡 {ex.notes}</Text>}
+      </View>
+      <TouchableOpacity
+        style={styles.swapBtn}
+        onPress={() => setSwapTarget(ex)}
+      >
+        <Text style={styles.swapBtnText}>🔄</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+))}
             </View>
           );
         })}
 
         {/* Start button (placeholder — wired in Phase 3) */}
+
           <TouchableOpacity
             style={styles.startBtn}
             onPress={async () => {
@@ -166,8 +257,11 @@ export const RoutineScreen: React.FC = () => {
                 if (navigationRef.isReady()) {
                   navigationRef.navigate('Workout' as never);
                 }
+                // Wait for WorkoutScreen to mount and subscribe before emitting
+                  setTimeout(() => {  
                 // Tell WorkoutScreen which exercise to open
                 sessionBus.emit({ type: 'openExercise', exerciseId: firstEx.exerciseId });
+                  }, 300);
               }
             }}
           >
@@ -177,6 +271,13 @@ export const RoutineScreen: React.FC = () => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+       <SwapModal
+        visible={swapTarget !== null}
+        currentExercise={swapTarget}
+        environment={envOverride ?? 'gym'}
+        onClose={() => setSwapTarget(null)}
+        onSelect={handleSwapExercise}
+      />
     </SafeAreaView>
   );
 };
@@ -243,4 +344,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 20,
   },
   startBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+
+  swapBtn: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  backgroundColor: '#334155',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginLeft: 8,
+},
+swapBtnText: { fontSize: 16 },
+
 });

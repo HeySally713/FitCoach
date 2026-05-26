@@ -14,6 +14,7 @@ export interface UseActiveSessionResult {
   startSession: (dayIndex: number, dayPlan: DailyWorkout) => Promise<ActiveSession>;
   /** Advance to next exercise; returns updated session or null if finished */
   advanceExercise: () => Promise<ActiveSession | null>;
+  goToPreviousExercise: () => Promise<ActiveSession | null>;
   /** Mark current exercise as completed (does not advance — call advanceExercise after) */
   markCurrentCompleted: () => Promise<void>;
   /** Replace an exercise in the active session */
@@ -22,6 +23,7 @@ export interface UseActiveSessionResult {
   endSession: () => Promise<void>;
   /** Reload from storage (useful on app foreground) */
   reload: () => Promise<void>;
+  
 }
 
 export function useActiveSession(): UseActiveSessionResult {
@@ -86,6 +88,19 @@ export function useActiveSession(): UseActiveSessionResult {
     return updated;
   }, [session]);
 
+  const goToPreviousExercise = async () => {
+  if (!session) return null;
+  if (session.currentExerciseIndex <= 0) return null; // already at first
+
+  const updated: ActiveSession = {
+    ...session,
+    currentExerciseIndex: session.currentExerciseIndex - 1,
+  };
+  await saveActiveSession(updated);
+  setSession(updated);
+  return updated;
+};
+
   const swapExercise = useCallback(
     async (originalId: string, newId: string) => {
       if (!session) return;
@@ -112,6 +127,7 @@ export function useActiveSession(): UseActiveSessionResult {
     loading,
     startSession,
     advanceExercise,
+    goToPreviousExercise,
     markCurrentCompleted,
     swapExercise,
     endSession,

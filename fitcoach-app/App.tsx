@@ -46,6 +46,7 @@ import { RoutineScreen } from './src/screens/RoutineScreen';
 import { SessionProvider, useSession } from './src/contexts/SessionContext';
 import { sessionBus } from './src/utils/sessionBus';
 import { SessionHeaderBar } from './src/components/SessionHeaderBar';
+import { RestTimer } from './src/components/RestTimer';
 
 
 const Tab = createBottomTabNavigator();
@@ -80,6 +81,7 @@ const [selectedIntensity, setSelectedIntensity] = useState<WorkoutIntensity | nu
 const [sets, setSets] = useState<SetState[]>([
     { id: 1, weight: '', reps: '', done: false },
   ]);
+const [showRestTimer, setShowRestTimer] = useState(false);
 
 // Step C: 영상 선택 + 카디오 시간 선택 상태
 const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -131,6 +133,7 @@ useEffect(() => {
       setCurrentVideoId(null);
       setCardioDuration(null);
       setSelectedExercise(dbExercise);
+      setShowRestTimer(false);
     }
   });
   return () => { unsub(); };
@@ -271,6 +274,11 @@ const toggleSetDone = (id: number) => {
   setSets((prev) =>
     prev.map((set) => (set.id === id ? { ...set, done: !set.done } : set))
   );
+  // NEW: trigger rest timer when marking done in an active session
+  const set = sets.find(s => s.id === id);
+  if (set && !set.done && session && selectedExercise?.equipmentType !== 'cardio') {
+    setShowRestTimer(true);
+  }
 };
 
 const updateSet = (id: number, field: 'weight' | 'reps', value: string) => {
@@ -353,6 +361,11 @@ const handlePostSaveSuccess = async () => {
   } else {
     closeModal();
   }
+};
+const getCurrentRestSec = (): number => {
+  if (!session || !selectedExercise) return 60;
+  const currentEx = session.dayPlan.exercises[session.currentExerciseIndex];
+  return currentEx?.restSec ?? 60;
 };
 
 // Step D: 운동 완료 - 기록 저장 (upsert: 기존 수정 + 신규 추가)
@@ -911,6 +924,12 @@ return (
             </View>
             )}
 
+            {showRestTimer && (
+            <RestTimer
+              initialSec={getCurrentRestSec()}
+              onComplete={() => setShowRestTimer(false)}
+            />
+          )}
             {/* 운동 완료 버튼 (cardio/weight 공통) */}
             <TouchableOpacity 
               style={styles.completeButton}

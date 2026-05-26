@@ -414,3 +414,39 @@ export const generateWeeklyPlan = (
 };
 
 
+
+
+export const getAlternatives = (
+  current: RoutineExercise,
+  environment: 'gym' | 'home',
+  count: number = 3
+): RoutineExercise[] => {
+  const currentDb = EXERCISES.find(e => e.exercise_id === current.exerciseId);
+  if (!currentDb) return [];
+
+  // Warmup/cooldown/cardio/yoga ignore environment
+  const ignoresEnv = ['warmup', 'cooldown', 'cardio', 'yoga'].includes(currentDb.category);
+
+  const candidates = EXERCISES.filter(e => {
+    if (e.exercise_id === current.exerciseId) return false;
+    if (e.category !== currentDb.category) return false;
+    if (e.movement_pattern !== currentDb.movement_pattern) return false;
+    if (!ignoresEnv && e.category !== environment) return false;
+    return true;
+  });
+
+  // Shuffle and take `count`
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count).map(ex => ({
+    exerciseId: ex.exercise_id,
+    nameKo: ex.name_ko,
+    category: ex.category as any,
+    movementPattern: ex.movement_pattern,
+    sets: current.sets,
+    reps: current.reps,
+    restSec: current.restSec,
+    notes: current.notes,
+    videoId: ex.video_id ?? '',
+    phase: current.phase,
+  }));
+};

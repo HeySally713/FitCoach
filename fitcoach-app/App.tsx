@@ -4,7 +4,7 @@ import { ExerciseFilterBar } from './src/components/ExerciseFilterBar';
 import { EXERCISES_BY_CATEGORY, EXERCISES_BY_CATEGORY_SEARCHABLE, ExerciseSearchable, ALL_EXERCISES } from './src/utils/exerciseAdapter';
 import { Exercise, CARDIO_DURATIONS, CardioDuration, ExerciseLevel } from './src/types/exercise';
 import React, { useState, useEffect, useMemo } from 'react';
-import { NavigationContainer, useFocusEffect, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { 
@@ -43,9 +43,14 @@ import { findExerciseById } from './src/utils/exerciseAdapter';
 import { updateExerciseInSession } from './src/services/storage';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { RoutineScreen } from './src/screens/RoutineScreen';
+import { SessionProvider, useSession } from './src/contexts/SessionContext';
+import { sessionBus } from './src/utils/sessionBus';
+import { SessionHeaderBar } from './src/components/SessionHeaderBar';
+
 
 const Tab = createBottomTabNavigator();
-export const navigationRef = createNavigationContainerRef();
+import { navigationRef } from './src/utils/navigation';
+
 
 interface SetState {
   id: number;
@@ -59,6 +64,7 @@ interface SetState {
 
 // 🏋️ 운동기록 화면 (메인 기능)
 const WorkoutScreen = () => {
+const { session, markCurrentCompleted, advanceExercise, endSession } = useSession();
 const [searchText, setSearchText] = useState('');
 const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
 const [selectedLevel, setSelectedLevel] = useState<ExerciseLevel | null>(null);
@@ -105,6 +111,27 @@ useEffect(() => {
     setSelectedIntensity(exercise.intensity ?? null);
     setEditingContext({ date, originalExerciseId: exercise.exerciseId });
     setSelectedExercise(dbExercise);
+  });
+  return () => { unsub(); };
+}, []);
+useEffect(() => {
+  const unsub = sessionBus.on((event) => {
+    if (event.type === 'openExercise') {
+      const dbExercise = findExerciseById(event.exerciseId);
+      if (!dbExercise) {
+        console.warn('[Session] exercise not found:', event.exerciseId);
+        return;
+      }
+      console.log('[Session] Opening next exercise:', dbExercise.name);
+      // Reset sets, open modal
+      setSets([{ id: 1, weight: '', reps: '', done: false }]);
+      setCardioFields({});
+      setSelectedBodyPart(null);
+      setSelectedIntensity(null);
+      setCurrentVideoId(null);
+      setCardioDuration(null);
+      setSelectedExercise(dbExercise);
+    }
   });
   return () => { unsub(); };
 }, []);
@@ -298,6 +325,35 @@ const closeModal = () => {
   setEditingContext(null);
   setSets([{ id: 1, weight: '', reps: '', done: false }]);
 };
+// 저장 완료 후: 세션 진행 또는 모달 닫기
+const handlePostSaveSuccess = async () => {
+  if (session) {
+    await markCurrentCompleted();
+    const next = await advanceExercise();
+    if (!next) {
+      Alert.alert(
+        '🎉 운동 완료!',
+        '오늘의 루틴을 모두 끝냈어요!\n수고하셨습니다 💪',
+        [{
+          text: '확인',
+          onPress: async () => {
+            await endSession();
+            closeModal();
+          },
+        }]
+      );
+      return;
+    }
+    const nextEx = next.dayPlan.exercises[next.currentExerciseIndex];
+    if (nextEx) {
+      sessionBus.emit({ type: 'openExercise', exerciseId: nextEx.exerciseId });
+    } else {
+      closeModal();
+    }
+  } else {
+    closeModal();
+  }
+};
 
 // Step D: 운동 완료 - 기록 저장 (upsert: 기존 수정 + 신규 추가)
 const handleCompleteWorkout = async () => {
@@ -360,7 +416,7 @@ const handleCompleteWorkout = async () => {
       Alert.alert(
         '✅ 기록 저장 완료',
         `${selectedExercise.name} ${duration}분\n🔥 약 ${calories} kcal`,
-        [{ text: '확인', onPress: closeModal }]
+  [     { text: '확인', onPress: handlePostSaveSuccess}]    
       );
     } catch (e) {
       console.error('[WorkoutScreen] cardio 저장 실패:', e);
@@ -422,9 +478,41 @@ const handleCompleteWorkout = async () => {
         ? `${selectedExercise.name} 총 ${completedSets.length}세트 (신규 ${newlyAdded}세트 추가)`
         : `${selectedExercise.name} ${completedSets.length}세트가 업데이트되었어요`;
 
-    Alert.alert('✅ 기록 저장 완료', message, [
-      { text: '확인', onPress: closeModal },
-    ]);
+  Alert.alert('✅ 기록 저장 완료', message, [
+  {
+    text: '확인',
+    onPress: async () => {
+      if (session) {
+        // Active session: mark completed and advance
+        await markCurrentCompleted();
+        const next = await advanceExercise();
+        if (!next) {
+          // Last exercise done — end session
+          Alert.alert(
+            '🎉 운동 완료!',
+            `오늘의 루틴을 모두 끝냈어요!\n수고하셨습니다 💪`,
+            [{ text: '확인', onPress: async () => {
+              await endSession();
+              closeModal();
+            }}]
+          );
+          return;
+        }
+        const nextEx = next.dayPlan.exercises[next.currentExerciseIndex];
+        if (nextEx) {
+          // Open next exercise in the modal
+          sessionBus.emit({ type: 'openExercise', exerciseId: nextEx.exerciseId });
+        } else {
+          closeModal();
+        }
+      } else {
+        // Not in a session — original behavior
+        closeModal();
+      }
+    },
+  },
+]);
+
   } catch (error) {
     console.error('[WorkoutScreen] 저장 실패:', error);
     Alert.alert('저장 실패', '잠시 후 다시 시도해주세요.');
@@ -515,7 +603,7 @@ return (
         onRequestClose={closeModal}
       >
         <SafeAreaView style={styles.modalScreen}>
-          
+            {session && <SessionHeaderBar />}
     
           {/* 모달 헤더 */}
           <View style={styles.modalHeader}>
@@ -826,7 +914,7 @@ return (
             {/* 운동 완료 버튼 (cardio/weight 공통) */}
             <TouchableOpacity 
               style={styles.completeButton}
-              onPress={handleCompleteWorkout}
+              onPress={handleCompleteWorkout }
             >
               <Text style={styles.completeButtonText}>💾 운동 완료</Text>
             </TouchableOpacity>
@@ -865,6 +953,7 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light" />
        <ErrorBoundary>
+        <SessionProvider>
       <NavigationContainer ref={navigationRef}>
         <Tab.Navigator
           screenOptions={{
@@ -895,6 +984,7 @@ export default function App() {
 
         </Tab.Navigator>
       </NavigationContainer>
+      </SessionProvider>
       </ErrorBoundary>
        </GestureHandlerRootView>
     </>

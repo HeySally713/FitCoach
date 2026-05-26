@@ -87,3 +87,30 @@ export interface WeeklyPlan {
   notes: string[];           // safety/progression tips
   generatedAt: string;
 }
+// ============= Active Session State =============
+
+export interface ActiveSession {
+  /** ISO timestamp when 시작하기 was tapped */
+  startedAt: string;
+  /** Index into WeeklyPlan.days (0-based) */
+  dayIndex: number;
+  /** Snapshot of the day's plan (so it survives recommendation rerolls) */
+  dayPlan: DailyWorkout;
+  /** Current exercise position (0-based, within dayPlan.exercises) */
+  currentExerciseIndex: number;
+  /** Exercise IDs the user has completed in this session */
+  completedExerciseIds: string[];
+  /** Swap map: { originalExerciseId: replacementExerciseId } */
+  swappedExercises: Record<string, string>;
+  /** ISO date of this session (e.g., "2026-05-20") */
+  sessionDate: string;
+}
+
+export interface RoutineProgress {
+  /** Which day index the user last completed (-1 = none yet) */
+  lastCompletedDayIndex: number;
+  /** ISO date of last completion */
+  lastCompletedDate: string | null;
+  /** Total sessions completed all-time */
+  totalSessionsCompleted: number;
+}

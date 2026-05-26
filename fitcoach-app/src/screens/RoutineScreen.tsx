@@ -1,3 +1,4 @@
+
 // src/screens/RoutineScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -7,10 +8,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { generateWeeklyPlan } from '../services/recommendation';
 import type { WeeklyPlan, DailyWorkout, RoutineExercise } from '../types/recommendation';
 import { getProfile } from '../services/profile';
+import { useSession } from '../contexts/SessionContext';
+import { navigationRef } from '../utils/navigation';
+import { sessionBus } from '../utils/sessionBus';  // we'll create this in Step 4
 
 type EnvOverride = 'gym' | 'home' | null;
 
 export const RoutineScreen: React.FC = () => {
+  const { startSession, session } = useSession();
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
   const [today, setToday] = useState<DailyWorkout | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,21 +153,34 @@ export const RoutineScreen: React.FC = () => {
         })}
 
         {/* Start button (placeholder — wired in Phase 3) */}
-        <TouchableOpacity
-          style={styles.startBtn}
-          onPress={() => {
-            // Phase 3 will replace this
-            console.log('[Routine] 시작하기 - Phase 3에서 구현');
-          }}
-        >
-          <Text style={styles.startBtnText}>▶ 시작하기</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.startBtn}
+            onPress={async () => {
+              if (!today) return;
+              // If there's already an active session, ask resume vs restart (later in Phase 3C)
+              // For now: clear and start fresh
+              const newSession = await startSession(dayIndex, today);
+              const firstEx = newSession.dayPlan.exercises[0];
+              if (firstEx) {
+                // Switch to 운동검색 tab and open the first exercise
+                if (navigationRef.isReady()) {
+                  navigationRef.navigate('Workout' as never);
+                }
+                // Tell WorkoutScreen which exercise to open
+                sessionBus.emit({ type: 'openExercise', exerciseId: firstEx.exerciseId });
+              }
+            }}
+          >
+            <Text style={styles.startBtnText}>▶ 시작하기</Text>
+          </TouchableOpacity>
+
 
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#0F172A' },

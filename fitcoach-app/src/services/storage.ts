@@ -282,3 +282,98 @@ export async function clearAllWorkouts(): Promise<void> {
   await AsyncStorage.removeItem(WORKOUT_STORAGE_KEY);
   console.log('[Storage] 전체 기록 삭제 완료');
 }
+
+// ============= Active Session & Routine Progress =============
+
+import type { ActiveSession, RoutineProgress } from '../types/recommendation';
+
+const ACTIVE_SESSION_KEY = '@FitCoach:activeSession';
+const ROUTINE_PROGRESS_KEY = '@FitCoach:routineProgress';
+
+/**
+ * 진행 중인 세션 저장 (시작 또는 진행 업데이트 시 호출)
+ */
+export async function saveActiveSession(session: ActiveSession): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(session));
+    console.log(`[Storage] 진행 세션 저장: 운동 ${session.currentExerciseIndex + 1}/${session.dayPlan.exercises.length}`);
+  } catch (e) {
+    console.error('[Storage] 진행 세션 저장 실패:', e);
+  }
+}
+
+/**
+ * 진행 중인 세션 불러오기 (없으면 null)
+ */
+export async function getActiveSession(): Promise<ActiveSession | null> {
+  try {
+    const raw = await AsyncStorage.getItem(ACTIVE_SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ActiveSession;
+  } catch (e) {
+    console.error('[Storage] 진행 세션 불러오기 실패:', e);
+    return null;
+  }
+}
+
+/**
+ * 진행 중인 세션 삭제 (완료 또는 종료 시 호출)
+ */
+export async function clearActiveSession(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(ACTIVE_SESSION_KEY);
+    console.log('[Storage] 진행 세션 삭제');
+  } catch (e) {
+    console.error('[Storage] 진행 세션 삭제 실패:', e);
+  }
+}
+
+/**
+ * 루틴 진행 상황 불러오기 (없으면 초기값)
+ */
+export async function getRoutineProgress(): Promise<RoutineProgress> {
+  try {
+    const raw = await AsyncStorage.getItem(ROUTINE_PROGRESS_KEY);
+    if (!raw) {
+      return {
+        lastCompletedDayIndex: -1,
+        lastCompletedDate: null,
+        totalSessionsCompleted: 0,
+      };
+    }
+    return JSON.parse(raw) as RoutineProgress;
+  } catch (e) {
+    console.error('[Storage] 루틴 진행 불러오기 실패:', e);
+    return {
+      lastCompletedDayIndex: -1,
+      lastCompletedDate: null,
+      totalSessionsCompleted: 0,
+    };
+  }
+}
+
+/**
+ * 루틴 진행 상황 저장 (세션 완료 시 호출)
+ */
+export async function saveRoutineProgress(progress: RoutineProgress): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ROUTINE_PROGRESS_KEY, JSON.stringify(progress));
+    console.log(`[Storage] 루틴 진행 저장: Day ${progress.lastCompletedDayIndex + 1} 완료`);
+  } catch (e) {
+    console.error('[Storage] 루틴 진행 저장 실패:', e);
+  }
+}
+
+/**
+ * 루틴 완료 처리: lastCompletedDayIndex 갱신 + 카운트 증가
+ */
+export async function completeRoutineDay(dayIndex: number): Promise<RoutineProgress> {
+  const current = await getRoutineProgress();
+  const updated: RoutineProgress = {
+    lastCompletedDayIndex: dayIndex,
+    lastCompletedDate: new Date().toISOString().slice(0, 10),
+    totalSessionsCompleted: current.totalSessionsCompleted + 1,
+  };
+  await saveRoutineProgress(updated);
+  return updated;
+}

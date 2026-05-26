@@ -26,7 +26,7 @@ import { StatsPeriod } from '../utils/stats';
 import { StatsView } from '../components/StatsView';
 import { getProfile } from '../services/profile';
 import { editBus } from '../utils/editBus';
-import { navigationRef } from '../../App';  // adjust path if needed
+import { navigationRef } from '../utils/navigation';  // adjust path if needed
 
 
 
